@@ -2,6 +2,10 @@
 #include <QQmlApplicationEngine>
 #include <QDebug>
 #include <QQuickWindow>
+#include <QCommandLineParser>
+#include <QCommandLineOption>
+
+#include "hxgisserver.h"
 
 int main(int argc, char *argv[])
 {
@@ -16,6 +20,25 @@ int main(int argc, char *argv[])
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGLRhi);
 
     QGuiApplication app(argc, argv);
+
+    QCommandLineParser parser;
+    parser.addHelpOption();
+    QCommandLineOption rootPathOption("root-path", "Map data root directory", "path", "/tmp/hx_gis_test");
+    QCommandLineOption portOption("port", "HTTP server port", "port", "8080");
+    parser.addOption(rootPathOption);
+    parser.addOption(portOption);
+    parser.process(app);
+
+    QString rootPath = parser.value(rootPathOption);
+    QString port = parser.value(portOption);
+    QString url = QString("0.0.0.0:%1").arg(port);
+
+    HXGISServer server(url.toUtf8().constData(), rootPath.toUtf8().constData());
+    if (!server.isRunning()) {
+        qCritical() << "Failed to start HXGIS Server on" << url;
+        return 1;
+    }
+    qDebug() << "HXGIS Server started, version:" << server.version();
 
     QQmlApplicationEngine engine;
 
