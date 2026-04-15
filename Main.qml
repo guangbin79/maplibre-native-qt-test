@@ -17,7 +17,7 @@ Window {
 
         PluginParameter {
             name: "maplibre.map.styles"
-            value: "http://localhost:8080/style.json"
+            value: "http://127.0.0.1:4943/style.json"
         }
     }
 

@@ -2,8 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QDebug>
 #include <QQuickWindow>
-#include <QCommandLineParser>
-#include <QCommandLineOption>
+#include <QDir>
 
 #include "hxgisserver.h"
 
@@ -21,24 +20,17 @@ int main(int argc, char *argv[])
 
     QGuiApplication app(argc, argv);
 
-    QCommandLineParser parser;
-    parser.addHelpOption();
-    QCommandLineOption rootPathOption("root-path", "Map data root directory", "path", "/tmp/hx_gis_test");
-    QCommandLineOption portOption("port", "HTTP server port", "port", "8080");
-    parser.addOption(rootPathOption);
-    parser.addOption(portOption);
-    parser.process(app);
+    // GIS Server 固定参数
+    static const char *gisUrl = "127.0.0.1:4943";
+    QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
 
-    QString rootPath = parser.value(rootPathOption);
-    QString port = parser.value(portOption);
-    QString url = QString("0.0.0.0:%1").arg(port);
-
-    HXGISServer server(url.toUtf8().constData(), rootPath.toUtf8().constData());
+    HXGISServer server(gisUrl, rootPath.toUtf8().constData());
     if (!server.isRunning()) {
-        qCritical() << "Failed to start HXGIS Server on" << url;
+        qCritical() << "Failed to start HXGIS Server on" << gisUrl;
         return 1;
     }
-    qDebug() << "HXGIS Server started, version:" << server.version();
+    qDebug() << "HXGIS Server started, version:" << server.version()
+             << "root_path:" << rootPath;
 
     QQmlApplicationEngine engine;
 
