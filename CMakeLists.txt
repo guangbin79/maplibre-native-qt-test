@@ -1,0 +1,56 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(untitled VERSION 0.1 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(ANDROID)
+    set(MAPLIBRE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Android")
+else()
+    set(MAPLIBRE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Linux")
+endif()
+list(APPEND CMAKE_PREFIX_PATH "${MAPLIBRE_SDK_DIR}/lib64/cmake/QMapLibre")
+
+find_package(QMapLibre REQUIRED COMPONENTS Core Location)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Positioning Location)
+
+qt_standard_project_setup(REQUIRES 6.5)
+
+qt_add_executable(appuntitled
+    main.cpp
+)
+
+if(ANDROID)
+    # Android 不需要手动 addLibraryPath，Qt 框架会自动处理 APK 内部的 plugins
+    target_compile_definitions(appuntitled PRIVATE IS_ANDROID)
+else()
+    # Linux 下，将 SDK 插件和 QML 模块的绝对路径传给 C++
+    set(SDK_PLUGINS_PATH "${MAPLIBRE_SDK_DIR}/plugins")
+    set(SDK_QML_PATH "${MAPLIBRE_SDK_DIR}/qml")
+    target_compile_definitions(appuntitled PRIVATE
+        SDK_PLUGINS_PATH="${SDK_PLUGINS_PATH}"
+        SDK_QML_PATH="${SDK_QML_PATH}"
+    )
+endif()
+
+qt_add_qml_module(appuntitled
+    URI untitled
+    QML_FILES Main.qml
+)
+
+target_link_libraries(appuntitled PRIVATE
+    Qt6::Quick
+    Qt6::QuickControls2
+    Qt6::Positioning
+    Qt6::Location
+    QMapLibre::Core
+    QMapLibre::Location
+)
+
+qmaplibre_location_setup_plugins(appuntitled)
+
+set_target_properties(appuntitled PROPERTIES
+    MACOSX_BUNDLE TRUE
+    WIN32_EXECUTABLE TRUE
+)
