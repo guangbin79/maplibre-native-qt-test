@@ -17,7 +17,7 @@ Window {
 
         PluginParameter {
             name: "maplibre.map.styles"
-            value: "https://demotiles.maplibre.org/style.json"
+            value: "http://localhost:8080/style.json"
         }
     }
 
