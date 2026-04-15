@@ -2,6 +2,9 @@
 #include <QQmlApplicationEngine>
 #include <QDebug>
 #include <QQuickWindow>
+#include <QDir>
+
+#include "hxgisserver.h"
 
 int main(int argc, char *argv[])
 {
@@ -16,6 +19,18 @@ int main(int argc, char *argv[])
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGLRhi);
 
     QGuiApplication app(argc, argv);
+
+    // GIS Server 固定参数
+    static const char *gisUrl = "127.0.0.1:4943";
+    QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
+
+    HXGISServer server(gisUrl, rootPath.toUtf8().constData());
+    if (!server.isRunning()) {
+        qCritical() << "Failed to start HXGIS Server on" << gisUrl;
+        return 1;
+    }
+    qDebug() << "HXGIS Server started, version:" << server.version()
+             << "root_path:" << rootPath;
 
     QQmlApplicationEngine engine;
 

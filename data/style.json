@@ -1,0 +1,23 @@
+{
+  "version": 8,
+  "name": "Offline MVT",
+  "sources": {
+    "offline-tiles": {
+      "type": "vector",
+      "tiles": [
+        "http://127.0.0.1:4943/gisserver/mbtiles/{z}/{x}/{y}/data.mbtiles"
+      ],
+      "maxzoom": 14,
+      "minzoom": 0
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f8f4f0"
+      }
+    }
+  ]
+}

@@ -24,6 +24,8 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(appuntitled
     main.cpp
+    hxgisserver.h
+    hxgisserver.cpp
 )
 
 if(ANDROID)
@@ -35,6 +37,15 @@ else()
         SDK_PLUGINS_PATH="${SDK_PLUGINS_PATH}"
         SDK_QML_PATH="${SDK_QML_PATH}"
     )
+endif()
+
+if(NOT ANDROID)
+    set(HXGISSERVER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib-plugin-HXGISServer/plugin-HXGISServer-linux/x86_64")
+    set(HXGISSERVER_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib-plugin-HXGISServer/plugin-HXGISServer-linux")
+    target_include_directories(appuntitled PRIVATE ${HXGISSERVER_INCLUDE_DIR})
+    target_link_directories(appuntitled PRIVATE ${HXGISSERVER_DIR})
+    target_link_libraries(appuntitled PRIVATE plugin-HXGISServer)
+    set_target_properties(appuntitled PROPERTIES BUILD_RPATH "${HXGISSERVER_DIR}")
 endif()
 
 qt_add_qml_module(appuntitled
