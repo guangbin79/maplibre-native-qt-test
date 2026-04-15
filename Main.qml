@@ -17,7 +17,7 @@ Window {
 
         PluginParameter {
             name: "maplibre.map.styles"
-            value: "http://127.0.0.1:4943/style.json"
+            value: "http://127.0.0.1:4943/styles/day/style.json?schema=hxmap"
         }
     }
 
@@ -25,8 +25,8 @@ Window {
         id: mapView
         anchors.fill: parent
         map.plugin: mapPlugin
-        map.center: QtPositioning.coordinate(39.9042, 116.4074)
-        map.zoomLevel: 1
+        map.center: QtPositioning.coordinate(36.75, 3.05)
+        map.zoomLevel: 8
 
         MapLibre.style: Style {
         }

@@ -24,6 +24,8 @@ int main(int argc, char *argv[])
     static const char *gisUrl = "127.0.0.1:4943";
     QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
 
+    qDebug() << "11111111: " << rootPath;
+
     HXGISServer server(gisUrl, rootPath.toUtf8().constData());
     if (!server.isRunning()) {
         qCritical() << "Failed to start HXGIS Server on" << gisUrl;
