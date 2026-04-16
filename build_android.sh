@@ -16,7 +16,11 @@ JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 # Android platform 版本
 ANDROID_PLATFORM="${ANDROID_PLATFORM:-android-33}"
 
+# Android NDK 路径
+ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/25.1.8937393}"
+
 TOOLCHAIN="${QT_ANDROID_DIR}/lib/cmake/Qt6/qt.toolchain.cmake"
+export ANDROID_NDK_ROOT
 
 if [ ! -f "${TOOLCHAIN}" ]; then
   echo "Error: Qt6 Android toolchain not found: ${TOOLCHAIN}"
@@ -24,19 +28,28 @@ if [ ! -f "${TOOLCHAIN}" ]; then
   exit 1
 fi
 
+if [ ! -d "${ANDROID_NDK_ROOT}" ]; then
+  echo "Error: Android NDK not found: ${ANDROID_NDK_ROOT}"
+  echo "Set ANDROID_NDK_ROOT to your Android NDK path."
+  exit 1
+fi
+
 echo "=== Android arm64-v8a Build ==="
 echo "Qt:     ${QT_ANDROID_DIR}"
 echo "SDK:    ${ANDROID_SDK_ROOT}"
 echo "JDK:    ${JAVA_HOME}"
+echo "NDK:    ${ANDROID_NDK_ROOT}"
 echo "Type:   ${BUILD_TYPE}"
 echo "Jobs:   ${JOBS}"
 echo ""
 
+rm -rf "${BUILD_DIR}"
 cmake -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
   -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN}" \
   -DANDROID_ABI=arm64-v8a \
   -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
+  -DANDROID_NDK_ROOT="${ANDROID_NDK_ROOT}" \
   -DQT_ANDROID_BUILD_ALL_ABIS=OFF
 
 cmake --build "${BUILD_DIR}" -j"${JOBS}"
