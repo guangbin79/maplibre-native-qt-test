@@ -44,12 +44,15 @@ echo "Jobs:   ${JOBS}"
 echo ""
 
 rm -rf "${BUILD_DIR}"
+MAPLIBRE_DIR="${PROJECT_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Android/arm64-v8a/lib/cmake/QMapLibre"
+
 cmake -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
   -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN}" \
   -DANDROID_ABI=arm64-v8a \
   -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
   -DANDROID_NDK_ROOT="${ANDROID_NDK_ROOT}" \
+  -DQMapLibre_DIR="${MAPLIBRE_DIR}" \
   -DQT_ANDROID_BUILD_ALL_ABIS=OFF
 
 cmake --build "${BUILD_DIR}" -j"${JOBS}"
