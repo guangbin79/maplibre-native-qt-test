@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="qt_libs">
+        <!-- Qt6 core libs are bundled automatically by qt_add_executable -->
+    </array>
+    <array name="bundled_libs">
+    </array>
+</resources>

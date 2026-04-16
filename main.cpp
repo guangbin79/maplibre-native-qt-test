@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QQuickWindow>
 #include <QDir>
+#include <QStandardPaths>
 
 #include "hxgisserver.h"
 
@@ -20,11 +21,20 @@ int main(int argc, char *argv[])
 
     QGuiApplication app(argc, argv);
 
+#ifdef IS_ANDROID
+    // Android: HXGISServer 使用应用内部存储路径作为 root_path
+    // map_data 由运行时按需获取或使用在线数据源
+    QString rootPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(rootPath);
+#else
+    // Linux: map_data 位于可执行文件同目录
+    QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
+#endif
+
     // GIS Server 固定参数
     static const char *gisUrl = "127.0.0.1:4943";
-    QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
 
-    qDebug() << "11111111: " << rootPath;
+    qDebug() << "HXGIS root path:" << rootPath;
 
     HXGISServer server(gisUrl, rootPath.toUtf8().constData());
     if (!server.isRunning()) {
