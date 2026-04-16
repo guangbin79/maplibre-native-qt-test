@@ -22,7 +22,7 @@ endif()
 
 # ── 查找依赖 ──────────────────────────────────────────────────
 if(ANDROID)
-    list(APPEND CMAKE_PREFIX_PATH "${MAPLIBRE_SDK_DIR}/lib/cmake/QMapLibre")
+    set(QMapLibre_DIR "${MAPLIBRE_SDK_DIR}/lib/cmake/QMapLibre" CACHE PATH "" FORCE)
 else()
     list(APPEND CMAKE_PREFIX_PATH "${MAPLIBRE_SDK_DIR}/lib64/cmake/QMapLibre")
 endif()
