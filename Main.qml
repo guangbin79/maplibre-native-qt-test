@@ -6,7 +6,7 @@
  *   2. 触摸手势支持（双指缩放、旋转、倾斜）
  *   3. 桌面端鼠标交互（右键旋转、中键倾斜、修饰键+滚轮）
  *   4. 左下角自适应比例尺（根据缩放级别自动调整刻度）
- *   5. 右上角控制面板（旋转/倾斜滑块）
+     *   5. 右上角控制面板（缩放/旋转/倾斜滑块）
  *
  * 数据流：
  *   HXGISServer (C++, 127.0.0.1:4943)  →  style.json  →  MapLibre 渲染
@@ -290,18 +290,18 @@ Window {
     }
 
     /* ── 右上角控制面板 ─────────────────────────────────────────
-     * 半透明浮动面板，包含旋转 (bearing) 和倾斜 (tilt) 两个垂直滑块。
+     * 半透明浮动面板，包含缩放、旋转 (bearing) 和倾斜 (tilt) 三个垂直滑块。
      * 滑块值与地图属性双向绑定：
      *   - 显示当前值（Label 实时更新）
      *   - 用户拖拽滑块时实时改变地图状态 (onMoved)
-     *   - 地图手势改变状态时滑块自动跟随 (value: mapView.map.bearing/tilt)
+     *   - 地图手势改变状态时滑块自动跟随 (value: mapView.map.*)
      */
     Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 10
         width: 70
-        height: parent.height / 3 + 60
+        height: parent.height / 3 + 120
         color: "#80000000"
         radius: 8
 
@@ -309,6 +309,31 @@ Window {
             anchors.fill: parent
             anchors.margins: 5
             spacing: 2
+
+            // 缩放级别标签
+            Label {
+                text: qsTr("缩放 Z%1").arg(Math.round(mapView.map.zoomLevel))
+                color: "white"
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+                width: parent.width
+            }
+
+            // 缩放滑块 (0 ~ 20)
+            Slider {
+                id: zoomSlider
+                width: parent.width
+                from: 0
+                to: 20
+                value: mapView.map.zoomLevel
+                orientation: Qt.Vertical
+                height: (parent.height - 90) / 3 - 10
+
+                onMoved: mapView.map.zoomLevel = value
+
+                ToolTip.visible: pressed
+                ToolTip.text: qsTr("缩放: Z%1").arg(Math.round(value))
+            }
 
             // 旋转角度标签
             Label {
@@ -327,7 +352,7 @@ Window {
                 to: 360
                 value: mapView.map.bearing  // 地图状态 → 滑块位置
                 orientation: Qt.Vertical
-                height: (parent.height - 60) / 2 - 10
+                height: (parent.height - 90) / 3 - 10
 
                 onMoved: mapView.map.bearing = value  // 滑块拖拽 → 地图状态
 
@@ -352,7 +377,7 @@ Window {
                 to: 60
                 value: mapView.map.tilt  // 地图状态 → 滑块位置
                 orientation: Qt.Vertical
-                height: (parent.height - 60) / 2 - 10
+                height: (parent.height - 90) / 3 - 10
 
                 onMoved: mapView.map.tilt = value  // 滑块拖拽 → 地图状态
 
