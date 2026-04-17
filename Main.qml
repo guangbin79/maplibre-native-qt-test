@@ -191,7 +191,7 @@ Window {
         anchors.bottom: parent.bottom
         anchors.leftMargin: 16
         anchors.bottomMargin: 24
-        width: scaleBarRect.width
+        width: scaleBarRect.width + 6 + zoomLabel.implicitWidth
         height: scaleBarLabel.height + scaleBarRect.height
 
         // 每像素对应的地面米数（Web Mercator 公式）
@@ -275,6 +275,17 @@ Window {
                 anchors.topMargin: -2
                 color: "black"
             }
+        }
+        // 缩放级别指示（显示在比例尺右侧）
+        Label {
+            id: zoomLabel
+            anchors.left: scaleBarRect.right
+            anchors.leftMargin: 6
+            anchors.verticalCenter: scaleBarRect.verticalCenter
+            text: "Z" + Math.round(mapView.map.zoomLevel)
+            color: "black"
+            font.pixelSize: 11
+            font.bold: true
         }
     }
 
