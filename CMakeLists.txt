@@ -1,10 +1,10 @@
 # CMakeLists.txt — 项目构建配置
 #
-# 本项目是一个跨平台 Qt/QML 地图应用，支持 Linux (x86_64) 和 Android (arm64-v8a)。
+# 本项目是一个跨平台 Qt Widget 地图应用，支持 Linux (x86_64) 和 Android (arm64-v8a)。
 #
 # 主要依赖：
-#   - Qt 6.6+ (Quick, QuickControls2, Positioning, Location)
-#   - MapLibre Native Qt SDK (QMapLibre::Core, QMapLibre::Location)
+#   - Qt 6.6+ (Widgets, OpenGLWidgets, Network)
+#   - MapLibre Native Qt SDK (QMapLibre::Widgets)
 #   - libplugin-HXGISServer.so（本地瓦片服务闭源库）
 #
 # 目录结构约定：
@@ -48,9 +48,9 @@ else()
     list(APPEND CMAKE_PREFIX_PATH "${MAPLIBRE_SDK_DIR}/lib64/cmake/QMapLibre")
 endif()
 
-# Qt Location 的 MapLibre 后端需要 Core 和 Location 两个组件
-find_package(QMapLibre REQUIRED COMPONENTS Core Location)
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Positioning Location)
+# QMapLibre Widgets 组件（内部依赖 Core + Qt6::OpenGLWidgets + Qt6::Widgets）
+find_package(QMapLibre REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets Network)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -59,6 +59,14 @@ qt_add_executable(appuntitled
     main.cpp
     hxgisserver.h
     hxgisserver.cpp
+    mainwindow.h
+    mainwindow.cpp
+    mapcontainer.h
+    mapcontainer.cpp
+    scalebarwidget.h
+    scalebarwidget.cpp
+    controlpanelwidget.h
+    controlpanelwidget.cpp
 )
 
 # ── HXGISServer：头文件 + 链接（Linux & Android 统一处理）────
@@ -70,40 +78,24 @@ target_link_libraries(appuntitled PRIVATE plugin-HXGISServer)
 # ── 平台特定编译定义 ─────────────────────────────────────────
 #   IS_ANDROID       — 代码中用于区分平台逻辑（数据路径、插件路径等）
 #   SDK_PLUGINS_PATH — Linux 下 Qt 插件目录（platforms, imageformats 等）
-#   SDK_QML_PATH     — Linux 下 MapLibre QML 模块目录
 if(ANDROID)
     target_compile_definitions(appuntitled PRIVATE IS_ANDROID)
 else()
     set(SDK_PLUGINS_PATH "${MAPLIBRE_SDK_DIR}/plugins")
-    set(SDK_QML_PATH "${MAPLIBRE_SDK_DIR}/qml")
     target_compile_definitions(appuntitled PRIVATE
         SDK_PLUGINS_PATH="${SDK_PLUGINS_PATH}"
-        SDK_QML_PATH="${SDK_QML_PATH}"
     )
     # Linux 运行时库搜索路径 — 让可执行文件能找到 libplugin-HXGISServer.so
     set_target_properties(appuntitled PROPERTIES BUILD_RPATH "${HXGISSERVER_DIR}")
 endif()
 
-# ── QML 模块 ─────────────────────────────────────────────────
-# 将 Main.qml 注册为 QML 模块 "untitled"，
-# 代码中通过 engine.loadFromModule("untitled", "Main") 加载
-qt_add_qml_module(appuntitled
-    URI untitled
-    QML_FILES Main.qml
-)
-
 # ── Qt 链接 ──────────────────────────────────────────────────
 target_link_libraries(appuntitled PRIVATE
-    Qt6::Quick
-    Qt6::QuickControls2
-    Qt6::Positioning
-    Qt6::Location
-    QMapLibre::Core
-    QMapLibre::Location
+    QMapLibre::Widgets
+    Qt6::Widgets
+    Qt6::OpenGLWidgets
+    Qt6::Network
 )
-
-# 设置 MapLibre Location 插件（将 MapLibre 后端注册为 Qt Location 的地图插件）
-qmaplibre_location_setup_plugins(appuntitled)
 
 # ── Android 部署配置 ────────────────────────────────────────
 # Android 需要额外配置：

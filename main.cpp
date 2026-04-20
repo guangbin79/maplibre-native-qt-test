@@ -1,27 +1,25 @@
 /**
  * @file main.cpp
- * @brief 应用程序入口 — 初始化本地 GIS 服务并启动 MapLibre 地图界面
+ * @brief 应用程序入口 — 初始化本地 GIS 服务并启动 QWidget 地图界面
  *
  * 整体流程：
  *   1. 根据平台（Linux / Android）配置 Qt 插件路径与数据目录
- *   2. 强制使用 OpenGL 渲染后端（MapLibre 依赖 OpenGL）
- *   3. 启动 HXGISServer（本地矢量瓦片服务，监听 127.0.0.1:4943）
- *   4. 创建 QML 引擎，加载 Main.qml 地图界面
+ *   2. 启动 HXGISServer（本地矢量瓦片服务，监听 127.0.0.1:4943）
+ *   3. 创建 MainWindow（QMainWindow），内含 QOpenGLWidget + MapLibre 渲染
  *
  * 依赖：
- *   - Qt 6.6+ (Quick, Positioning, Location)
+ *   - Qt 6.6+ (Widgets, OpenGL)
  *   - MapLibre Native Qt 绑定 (QMapLibre)
  *   - libplugin-HXGISServer.so（闭源本地瓦片服务库）
  */
 
-#include <QGuiApplication>
-#include <QQmlApplicationEngine>
+#include <QApplication>
 #include <QDebug>
-#include <QQuickWindow>
 #include <QDir>
 #include <QStandardPaths>
 
 #include "hxgisserver.h"
+#include "mainwindow.h"
 
 int main(int argc, char *argv[])
 {
@@ -36,15 +34,9 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
-    /* ── 2. 强制 OpenGL 渲染后端 ───────────────────────────────
-     * MapLibre Native 依赖 OpenGL 进行矢量瓦片渲染。
-     * 在 Qt 6 中默认可能使用 Vulkan 或软件渲染，必须显式指定 OpenGL RHI。
-     */
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGLRhi);
+    QApplication app(argc, argv);
 
-    QGuiApplication app(argc, argv);
-
-    /* ── 3. 确定 GIS 数据根目录 ────────────────────────────────
+    /* ── 2. 确定 GIS 数据根目录 ────────────────────────────────
      * GIS Server 需要一个 root_path 作为瓦片数据的存放/查找根目录：
      *   - Android: 使用应用专属数据目录 (AppDataLocation)
      *              例如 /data/data/org.qtproject.example.untitled/files/
@@ -63,7 +55,7 @@ int main(int argc, char *argv[])
 
     qDebug() << "HXGIS root path:" << rootPath;
 
-    /* ── 4. 启动 HXGIS Server ──────────────────────────────────
+    /* ── 3. 启动 HXGIS Server ──────────────────────────────────
      * HXGISServer 是对 libplugin-HXGISServer.so 的 C++ 封装。
      * 构造时调用 C API plugin_HXGISServer_create() 启动本地 HTTP 服务，
      * 提供 Vector Tiles (MVT) 和 MapLibre Style JSON。
@@ -78,23 +70,12 @@ int main(int argc, char *argv[])
     qDebug() << "HXGIS Server started, version:" << server.version()
              << "root_path:" << rootPath;
 
-    /* ── 5. 创建 QML 引擎 ──────────────────────────────────────
-     * Linux 下需要手动添加 MapLibre QML 模块的导入路径，
-     * Android 下 Qt for Android 会自动发现 QML 模块。
+    /* ── 4. 创建 MainWindow ─────────────────────────────────────
+     * MainWindow 是 QMainWindow 子类，内含 QOpenGLWidget 承载 MapLibre 渲染。
+     * QOpenGLWidget 自动管理 OpenGL 上下文，无需手动设置 RHI 后端。
      */
-    QQmlApplicationEngine engine;
+    MainWindow window;
+    window.show();
 
-#ifndef IS_ANDROID
-#ifdef SDK_QML_PATH
-    engine.addImportPath(SDK_QML_PATH);
-#endif
-#endif
-
-    // 打印导入路径和可用插件（调试用）
-    qDebug() << "Import paths:" << engine.importPathList();
-
-    // 从 QML 模块 "untitled" 中加载 Main.qml（由 CMakeLists.txt 的 qt_add_qml_module 定义）
-    engine.loadFromModule("untitled", "Main");
-
-    return QCoreApplication::exec();
+    return app.exec();
 }
