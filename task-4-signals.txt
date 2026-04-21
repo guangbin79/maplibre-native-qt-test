@@ -1,0 +1,34 @@
+MainWindow Signal Connections Verification
+==========================================
+
+All 4 required MapContainer signals are connected:
+
+1. zoomChanged
+   Line 48: connect(m_mapContainer, &MapContainer::zoomChanged,
+                    m_controlPanel, &ControlPanelWidget::setZoomValue);
+   Line 56: connect(m_mapContainer, &MapContainer::zoomChanged,
+                    this, [this](double zoom) {
+                        m_scaleBar->updateScale(m_mapContainer->map()->latitude(), zoom);
+                    });
+
+2. bearingChanged
+   Line 50: connect(m_mapContainer, &MapContainer::bearingChanged,
+                    m_controlPanel, &ControlPanelWidget::setBearingValue);
+
+3. tiltChanged
+   Line 52: connect(m_mapContainer, &MapContainer::tiltChanged,
+                    m_controlPanel, &ControlPanelWidget::setTiltValue);
+
+4. centerChanged
+   Line 60: connect(m_mapContainer, &MapContainer::centerChanged,
+                    this, [this](double lat, double lon) {
+                        Q_UNUSED(lon);
+                        m_scaleBar->updateScale(lat, m_mapContainer->map()->zoom());
+                    });
+
+Additional signal connections (ControlPanel → Map):
+- Line 40: ControlPanelWidget::zoomChanged → map()->setZoom()
+- Line 42: ControlPanelWidget::bearingChanged → map()->setBearing()
+- Line 44: ControlPanelWidget::tiltChanged → map()->setPitch()
+
+Status: ALL SIGNALS CONNECTED CORRECTLY

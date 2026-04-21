@@ -1,0 +1,6 @@
+Build passed successfully on Linux.
+
+[ 11%] Automatic MOC and UIC for target appuntitled
+[ 11%] Built target appuntitled_autogen
+Consolidate compiler generated dependencies of target appuntitled
+[100%] Built target appuntitled

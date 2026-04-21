@@ -1,0 +1,12 @@
+All includes in mapcontainer.cpp are used. No unused includes found.
+
+Includes checked:
+#include "mapcontainer.h"
+#include <QMapLibreWidgets/GLWidget>
+#include <QMapLibre/Map>
+#include <QMapLibre/Settings>
+#include <QMapLibre/Types>
+#include <QVBoxLayout>
+#include <QTouchEvent>
+#include <QLineF>
+#include <cmath>
