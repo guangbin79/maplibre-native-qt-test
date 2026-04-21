@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QTouchEvent>
 #include <QMapLibre/Types>
 
 namespace QMapLibre {
@@ -46,13 +47,8 @@ private:
     double m_lastLat = 0.0;
     double m_lastLon = 0.0;
 
-#ifdef Q_OS_ANDROID
-    void handlePinchGesture(QPinchGesture *gesture);
-
-    bool m_gestureActive = false;
-    double m_startZoom = 0;
-    double m_startBearing = 0;
-    double m_startDistance = 0;
-    QPointF m_startCenter;
-#endif
+    bool m_touchActive = false;
+    int m_touchPointCount = 0;
+    QList<QTouchEvent::TouchPoint> m_lastTouchPoints;
+    QPointF m_lastMousePos;
 };

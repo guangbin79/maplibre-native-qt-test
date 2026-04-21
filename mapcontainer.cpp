@@ -4,12 +4,9 @@
 #include <QMapLibre/Settings>
 #include <QMapLibre/Types>
 #include <QVBoxLayout>
-
-#ifdef Q_OS_ANDROID
-#include <QGestureEvent>
-#include <QPinchGesture>
+#include <QTouchEvent>
+#include <QLineF>
 #include <cmath>
-#endif
 
 MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     : QWidget(parent)
@@ -66,9 +63,7 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_lastLat = settings.defaultCoordinate().first;
     m_lastLon = settings.defaultCoordinate().second;
 
-#ifdef Q_OS_ANDROID
-    grabGesture(Qt::PinchGesture);
-#endif
+    setAttribute(Qt::WA_AcceptTouchEvents);
 }
 
 void MapContainer::setStyle(const QString &styleUrl) {
@@ -96,44 +91,65 @@ QMapLibre::Map *MapContainer::map() const {
 }
 
 bool MapContainer::event(QEvent *event) {
-#ifdef Q_OS_ANDROID
-    if (event->type() == QEvent::Gesture) {
-        auto *gestureEvent = static_cast<QGestureEvent*>(event);
-        if (auto *pinch = static_cast<QPinchGesture*>(gestureEvent->gesture(Qt::PinchGesture))) {
-            handlePinchGesture(pinch);
-            return true;
-        }
+    switch (event->type()) {
+    case QEvent::TouchBegin: {
+        auto *touchEvent = static_cast<QTouchEvent *>(event);
+        m_touchActive = true;
+        m_touchPointCount = touchEvent->points().count();
+        m_lastTouchPoints = touchEvent->points();
+        map()->setGestureInProgress(true);
+        event->accept();
+        return true;
     }
-#endif
-    return QWidget::event(event);
+    case QEvent::TouchUpdate: {
+        auto *touchEvent = static_cast<QTouchEvent *>(event);
+        const auto &points = touchEvent->points();
+        m_touchPointCount = points.count();
+
+        if (m_touchPointCount == 1 && m_lastTouchPoints.count() >= 1) {
+            QPointF delta = points.first().position() - m_lastTouchPoints.first().position();
+            map()->moveBy(delta);
+        } else if (m_touchPointCount == 2 && m_lastTouchPoints.count() >= 2) {
+            const QPointF &p1 = points.at(0).position();
+            const QPointF &p2 = points.at(1).position();
+            const QPointF &prevP1 = m_lastTouchPoints.at(0).position();
+            const QPointF &prevP2 = m_lastTouchPoints.at(1).position();
+
+            qreal currDist = QLineF(p1, p2).length();
+            qreal prevDist = QLineF(prevP1, prevP2).length();
+            if (prevDist > 0 && currDist > 0) {
+                qreal scaleFactor = currDist / prevDist;
+                QPointF center = (p1 + p2) / 2.0;
+                map()->scaleBy(scaleFactor, center);
+            }
+
+            QLineF currLine(p1, p2);
+            QLineF prevLine(prevP1, prevP2);
+            qreal angleDelta = currLine.angle() - prevLine.angle();
+            if (std::abs(angleDelta) > 0.1) {
+                map()->rotateBy(p1, p2);
+            }
+
+            QPointF centerDelta = ((p1 + p2) / 2.0) - ((prevP1 + prevP2) / 2.0);
+            if (centerDelta.manhattanLength() > 0) {
+                map()->moveBy(centerDelta);
+            }
+        }
+
+        m_lastTouchPoints = points;
+        event->accept();
+        return true;
+    }
+    case QEvent::TouchEnd:
+    case QEvent::TouchCancel: {
+        m_touchActive = false;
+        m_touchPointCount = 0;
+        m_lastTouchPoints.clear();
+        map()->setGestureInProgress(false);
+        event->accept();
+        return true;
+    }
+    default:
+        return QWidget::event(event);
+    }
 }
-
-#ifdef Q_OS_ANDROID
-void MapContainer::handlePinchGesture(QPinchGesture *gesture) {
-    QMapLibre::Map *m = m_glWidget->map();
-
-    if (gesture->state() == Qt::GestureStarted) {
-        m_gestureActive = true;
-        m_startZoom = m->zoom();
-        m_startBearing = m->bearing();
-    }
-
-    if (gesture->state() == Qt::GestureUpdated || gesture->state() == Qt::GestureStarted) {
-        // Scale (zoom)
-        if (gesture->changeFlags() & QPinchGesture::ScaleFactorChanged) {
-            double newZoom = m_startZoom + std::log2(gesture->totalScaleFactor());
-            m->setZoom(newZoom);
-        }
-
-        // Rotation (bearing)
-        if (gesture->changeFlags() & QPinchGesture::RotationAngleChanged) {
-            double newBearing = m_startBearing + gesture->totalRotationAngle();
-            m->setBearing(newBearing);
-        }
-    }
-
-    if (gesture->state() == Qt::GestureFinished || gesture->state() == Qt::GestureCanceled) {
-        m_gestureActive = false;
-    }
-}
-#endif
