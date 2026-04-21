@@ -153,3 +153,35 @@ bool MapContainer::event(QEvent *event) {
         return QWidget::event(event);
     }
 }
+
+void MapContainer::mousePressEvent(QMouseEvent *event) {
+    if (m_touchActive) {
+        event->ignore();
+        return;
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void MapContainer::mouseMoveEvent(QMouseEvent *event) {
+    if (m_touchActive) {
+        event->ignore();
+        return;
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void MapContainer::mouseReleaseEvent(QMouseEvent *event) {
+    if (m_touchActive) {
+        event->ignore();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void MapContainer::wheelEvent(QWheelEvent *event) {
+    if (m_touchActive) {
+        event->ignore();
+        return;
+    }
+    QWidget::wheelEvent(event);
+}
