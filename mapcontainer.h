@@ -1,18 +1,33 @@
 #pragma once
 #include <QWidget>
+#include <QMapLibre/Types>
 
 namespace QMapLibre {
 class GLWidget;
 class Map;
 }
 
-class QPinchGesture;
-
 class MapContainer : public QWidget {
     Q_OBJECT
 public:
-    explicit MapContainer(QWidget *parent = nullptr);
+    struct MapConfig {
+        QString styleUrl;
+        QMapLibre::Coordinate defaultCoordinate;
+        double defaultZoom;
+        MapConfig(const QString &url = QString(),
+                  const QMapLibre::Coordinate &coord = QMapLibre::Coordinate(36.75, 3.05),
+                  double zoom = 8.0)
+            : styleUrl(url), defaultCoordinate(coord), defaultZoom(zoom) {}
+    };
+
+    explicit MapContainer(const MapConfig &config = MapConfig(), QWidget *parent = nullptr);
     QMapLibre::Map *map() const;
+
+    void setStyle(const QString &styleUrl);
+    void setCenter(double lat, double lon);
+    void setZoom(double zoom);
+    void setBearing(double bearing);
+    void setPitch(double pitch);
 
 signals:
     void zoomChanged(double zoom);

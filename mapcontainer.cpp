@@ -11,18 +11,20 @@
 #include <cmath>
 #endif
 
-MapContainer::MapContainer(QWidget *parent)
+MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     : QWidget(parent)
     , m_glWidget(nullptr)
 {
     // Configure settings
     QMapLibre::Settings settings;
     // Coordinate order is (latitude, longitude)
-    settings.setDefaultCoordinate(QMapLibre::Coordinate(36.75, 3.05));
-    settings.setDefaultZoom(8);
-    settings.setStyles(QMapLibre::Styles{
-        QMapLibre::Style("http://127.0.0.1:4943/styles/day/style.json?schema=hxmap", "HXGIS Day")
-    });
+    settings.setDefaultCoordinate(config.defaultCoordinate);
+    settings.setDefaultZoom(config.defaultZoom);
+    if (!config.styleUrl.isEmpty()) {
+        settings.setStyles(QMapLibre::Styles{
+            QMapLibre::Style(config.styleUrl, QStringLiteral("HXGIS Day"))
+        });
+    }
 
     m_glWidget = new QMapLibre::GLWidget(settings);
 
@@ -67,6 +69,26 @@ MapContainer::MapContainer(QWidget *parent)
 #ifdef Q_OS_ANDROID
     grabGesture(Qt::PinchGesture);
 #endif
+}
+
+void MapContainer::setStyle(const QString &styleUrl) {
+    m_glWidget->map()->setStyleUrl(styleUrl);
+}
+
+void MapContainer::setCenter(double lat, double lon) {
+    m_glWidget->map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
+}
+
+void MapContainer::setZoom(double zoom) {
+    m_glWidget->map()->setZoom(zoom);
+}
+
+void MapContainer::setBearing(double bearing) {
+    m_glWidget->map()->setBearing(bearing);
+}
+
+void MapContainer::setPitch(double pitch) {
+    m_glWidget->map()->setPitch(pitch);
 }
 
 QMapLibre::Map *MapContainer::map() const {

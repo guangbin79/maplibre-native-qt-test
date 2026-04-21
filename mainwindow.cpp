@@ -22,7 +22,9 @@ MainWindow::MainWindow(QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    m_mapContainer = new MapContainer(central);
+    MapContainer::MapConfig config;
+    config.styleUrl = QStringLiteral("http://127.0.0.1:4943/styles/day/style.json?schema=hxmap");
+    m_mapContainer = new MapContainer(config, central);
     layout->addWidget(m_mapContainer, 1);
 
     m_controlPanel = new ControlPanelWidget(central);
