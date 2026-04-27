@@ -179,7 +179,11 @@ int main(int argc, char *argv[])
 #ifdef IS_ANDROID
     if (!hasManageExternalStoragePermission()) {
         requestManageExternalStoragePermission();
-        qDebug() << "MANAGE_EXTERNAL_STORAGE not granted. Redirecting to system settings...";
+        QMessageBox::warning(nullptr, QStringLiteral("需要存储权限"),
+            QStringLiteral("本应用需要访问外部存储权限才能读取地图数据。\n\n"
+                           "请在系统设置中授予\"所有文件访问权限\"，"
+                           "然后重新启动应用。"));
+        return 1;
     }
 
     QString rootPath = getExternalStorageRootPath();
