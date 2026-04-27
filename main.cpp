@@ -161,6 +161,10 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
+#ifdef IS_ANDROID
+    // Android 强制使用 OpenGL ES 硬件加速，避免 Raster 软件渲染
+    QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
+#endif
     QApplication app(argc, argv);
 
     /* ── 2. 确定 GIS 数据根目录 ────────────────────────────────

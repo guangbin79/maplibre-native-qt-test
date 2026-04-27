@@ -18,13 +18,11 @@
  */
 
 #include "mapcontainer.h"
-#include <QMapLibreWidgets/GLWidget>
-#include <QMapLibre/Map>
-#include <QMapLibre/Settings>
-#include <QMapLibre/Types>
 #include <QVBoxLayout>
 #include <QTouchEvent>
-#include <QLineF>
+#include <QMapLibreWidgets/GLWidget>
+#include <QMapLibre/Map>
+#include <QDateTime>
 #include <cmath>
 
 MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
@@ -83,6 +81,7 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
             change != QMapLibre::Map::MapChangeRegionDidChangeAnimated)
             return;
 
+        qint64 mapChangeStart = QDateTime::currentMSecsSinceEpoch();
         // 检查并同步 zoom（缩放级别）
         if (m->zoom() != m_lastZoom) {
             m_lastZoom = m->zoom();
@@ -104,6 +103,11 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
             m_lastLat = coord.first;
             m_lastLon = coord.second;
             emit centerChanged(coord.first, coord.second);
+        }
+        qint64 mapChangeEnd = QDateTime::currentMSecsSinceEpoch();
+        if ((mapChangeEnd - mapChangeStart) > 5) {
+            qDebug() << "[PERF] mapChanged handler ms=" << (mapChangeEnd - mapChangeStart)
+                     << "change=" << change;
         }
     });
 
@@ -181,6 +185,7 @@ bool MapContainer::event(QEvent *event) {
         }
 
         map()->setGestureInProgress(true);
+        emit touchBegin();
         event->accept();
         return true;
     }
@@ -222,6 +227,7 @@ bool MapContainer::event(QEvent *event) {
     // 3. 更新 m_lastTouchPoints 为当前帧数据，供下一帧计算使用
     // ============================================================
     case QEvent::TouchUpdate: {
+        qint64 touchUpdateStart = QDateTime::currentMSecsSinceEpoch();
         auto *touchEvent = static_cast<QTouchEvent *>(event);
         const auto &points = touchEvent->points();
         m_touchPointCount = points.count();
@@ -277,8 +283,6 @@ bool MapContainer::event(QEvent *event) {
             }
 
             // ── 双指旋转 ──
-            // 使用 rotateBy() 替代 setBearing()：MapLibre 专为手势旋转设计的增量 API，
-            // 内部自动计算旋转中心并优化渲染路径，避免手动 angleDelta 计算和 bearing() getter 开销
             if (m_gestureMode == GestureMode::None ||
                 m_gestureMode == GestureMode::Rotate ||
                 m_gestureMode == GestureMode::Both) {
@@ -290,9 +294,11 @@ bool MapContainer::event(QEvent *event) {
                 if (std::abs(angleDelta) > 0.5) {
                     m_accumulatedRotation += angleDelta;
                     ++m_rotationSkipCounter;
-                    // 节流：每 2 帧或累积角度 > 2° 时应用，降低 zoom 8 渲染压力
                     if (m_rotationSkipCounter % 2 == 0 || std::abs(m_accumulatedRotation) > 2.0) {
+                        qint64 t1 = QDateTime::currentMSecsSinceEpoch();
                         map()->rotateBy(prevP1, p1);
+                        qint64 t2 = QDateTime::currentMSecsSinceEpoch();
+                        qDebug() << "[PERF] rotateBy() ms=" << (t2 - t1) << "zoom=" << map()->zoom() << "bearing=" << map()->bearing();
                         m_accumulatedRotation = 0.0;
                     }
                 }
@@ -306,8 +312,14 @@ bool MapContainer::event(QEvent *event) {
         }
 
         // 保存当前帧触摸点，供下一帧使用
+        // 保存当前帧触摸点，供下一帧使用
         m_lastTouchPoints = points;
         event->accept();
+        qint64 touchUpdateEnd = QDateTime::currentMSecsSinceEpoch();
+        if (m_touchPointCount == 2) {
+            qDebug() << "[PERF] TouchUpdate total ms=" << (touchUpdateEnd - touchUpdateStart)
+                     << "gestureMode=" << static_cast<int>(m_gestureMode);
+        }
         return true;
     }
     // ============================================================
@@ -331,6 +343,7 @@ bool MapContainer::event(QEvent *event) {
         m_accumulatedRotation = 0.0;
         m_rotationSkipCounter = 0;
         map()->setGestureInProgress(false);
+        emit touchEnd();
         event->accept();
         return true;
     }

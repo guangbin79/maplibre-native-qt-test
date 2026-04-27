@@ -42,6 +42,13 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
 
+    /**
+     * @brief 设置手势状态，控制非地图控件的更新
+     * 在触摸手势期间禁用 ControlPanel 和 ScaleBar 的更新，
+     * 避免 mapChanged 信号触发大量 QWidget 重绘，减少 CPU 竞争。
+     */
+    void setGestureActive(bool active);
+
 protected:
     void resizeEvent(QResizeEvent *event) override;
 

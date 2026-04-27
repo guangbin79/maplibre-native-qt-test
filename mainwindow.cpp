@@ -85,6 +85,12 @@ MainWindow::MainWindow(QWidget *parent)
         Q_UNUSED(lon);
         m_scaleBar->updateScale(lat, m_mapContainer->map()->zoom());
     });
+
+    // 4. 触摸手势期间禁用非地图控件更新，减少 CPU 竞争
+    connect(m_mapContainer, &MapContainer::touchBegin,
+            this, [this]() { setGestureActive(true); });
+    connect(m_mapContainer, &MapContainer::touchEnd,
+            this, [this]() { setGestureActive(false); });
 }
 
 /**
@@ -108,4 +114,20 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 void MainWindow::repositionScaleBar()
 {
     m_scaleBar->move(16, m_mapContainer->height() - m_scaleBar->height() - 24);
+}
+
+void MainWindow::setGestureActive(bool active)
+{
+    // 在触摸手势期间禁用 ControlPanel 和 ScaleBar 的更新
+    // 避免 mapChanged 信号触发大量 QWidget 重绘，减少 CPU 与 GL 线程竞争
+    if (active) {
+        m_controlPanel->setUpdatesEnabled(false);
+        m_scaleBar->setUpdatesEnabled(false);
+    } else {
+        m_controlPanel->setUpdatesEnabled(true);
+        m_scaleBar->setUpdatesEnabled(true);
+        // 手势结束后强制更新一次，同步最终状态
+        m_controlPanel->update();
+        m_scaleBar->update();
+    }
 }

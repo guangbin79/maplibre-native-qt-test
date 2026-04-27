@@ -462,6 +462,22 @@ signals:
     void tiltChanged(double tilt);
 
     /**
+     * @brief 触摸手势开始信号
+     *
+     * 当检测到触摸按下（TouchBegin）时发射，用于通知外部控件
+     * 暂时禁用更新以减少 CPU 竞争，提升地图渲染性能。
+     */
+    void touchBegin();
+
+    /**
+     * @brief 触摸手势结束信号
+     *
+     * 当触摸释放（TouchEnd/TouchCancel）时发射，用于通知外部控件
+     * 恢复正常的更新和重绘。
+     */
+    void touchEnd();
+
+    /**
      * @brief 中心点变化信号
      *
      * 当地图中心点坐标发生变化时发射。触发时机包括：
