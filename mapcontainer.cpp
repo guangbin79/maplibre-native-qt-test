@@ -165,6 +165,16 @@ bool MapContainer::event(QEvent *event) {
         m_touchActive = true;
         m_touchPointCount = touchEvent->points().count();
         m_lastTouchPoints = touchEvent->points();
+
+        // 双指按下时初始化手势识别状态
+        if (m_touchPointCount == 2) {
+            m_gestureMode = GestureMode::None;
+            const QPointF &p1 = m_lastTouchPoints.at(0).position();
+            const QPointF &p2 = m_lastTouchPoints.at(1).position();
+            m_initialPinchDist = QLineF(p1, p2).length();
+            m_initialPinchAngle = QLineF(p1, p2).angle();
+        }
+
         map()->setGestureInProgress(true);
         event->accept();
         return true;
@@ -222,28 +232,51 @@ bool MapContainer::event(QEvent *event) {
             const QPointF &prevP1 = m_lastTouchPoints.at(0).position();
             const QPointF &prevP2 = m_lastTouchPoints.at(1).position();
 
+            // 手势模式识别：前 3 帧内判断用户主导意图并锁定
+            if (m_gestureMode == GestureMode::None && m_initialPinchDist > 10.0) {
+                qreal currDist = QLineF(p1, p2).length();
+                qreal currAngle = QLineF(p1, p2).angle();
+                qreal distChange = std::abs(currDist - m_initialPinchDist) / m_initialPinchDist;
+                qreal angleChange = currAngle - m_initialPinchAngle;
+                while (angleChange > 180.0) angleChange -= 360.0;
+                while (angleChange < -180.0) angleChange += 360.0;
+                angleChange = std::abs(angleChange);
+
+                if (distChange > 0.06 && angleChange < 3.0) {
+                    m_gestureMode = GestureMode::Scale;
+                } else if (angleChange > 3.0 && distChange < 0.06) {
+                    m_gestureMode = GestureMode::Rotate;
+                } else if (distChange > 0.06 && angleChange > 3.0) {
+                    m_gestureMode = GestureMode::Both;
+                }
+            }
+
             // ── 双指缩放 ──
-            qreal currDist = QLineF(p1, p2).length();
-            qreal prevDist = QLineF(prevP1, prevP2).length();
-            if (prevDist > 10.0 && currDist > 10.0) {
-                qreal scaleFactor = currDist / prevDist;
-                // 限制单帧缩放幅度，避免抖动和突变
-                scaleFactor = qBound(0.85, scaleFactor, 1.2);
-                QPointF center = (p1 + p2) / 2.0;
-                map()->scaleBy(scaleFactor, center);
+            if (m_gestureMode == GestureMode::None ||
+                m_gestureMode == GestureMode::Scale ||
+                m_gestureMode == GestureMode::Both) {
+                qreal currDist = QLineF(p1, p2).length();
+                qreal prevDist = QLineF(prevP1, prevP2).length();
+                if (prevDist > 10.0 && currDist > 10.0) {
+                    qreal scaleFactor = currDist / prevDist;
+                    scaleFactor = qBound(0.85, scaleFactor, 1.2);
+                    QPointF center = (p1 + p2) / 2.0;
+                    map()->scaleBy(scaleFactor, center);
+                }
             }
 
             // ── 双指旋转 ──
-            QLineF currLine(p1, p2);
-            QLineF prevLine(prevP1, prevP2);
-            qreal angleDelta = currLine.angle() - prevLine.angle();
-            // 归一化到 [-180, 180]，处理 0°/360° 跨越
-            while (angleDelta > 180.0) angleDelta -= 360.0;
-            while (angleDelta < -180.0) angleDelta += 360.0;
-            // 阈值 0.5°：过滤微小抖动，保持旋转灵敏度
-            if (std::abs(angleDelta) > 0.5) {
-                qDebug() << "[ROTATE] angleDelta=" << angleDelta << "bearing=" << map()->bearing();
-                map()->setBearing(map()->bearing() + angleDelta);
+            if (m_gestureMode == GestureMode::None ||
+                m_gestureMode == GestureMode::Rotate ||
+                m_gestureMode == GestureMode::Both) {
+                QLineF currLine(p1, p2);
+                QLineF prevLine(prevP1, prevP2);
+                qreal angleDelta = currLine.angle() - prevLine.angle();
+                while (angleDelta > 180.0) angleDelta -= 360.0;
+                while (angleDelta < -180.0) angleDelta += 360.0;
+                if (std::abs(angleDelta) > 0.5) {
+                    map()->setBearing(map()->bearing() + angleDelta);
+                }
             }
 
             // ── 双指平移 ──
@@ -275,6 +308,7 @@ bool MapContainer::event(QEvent *event) {
         m_touchActive = false;
         m_touchPointCount = 0;
         m_lastTouchPoints.clear();
+        m_gestureMode = GestureMode::None; // 手势结束，重置锁定状态
         map()->setGestureInProgress(false);
         event->accept();
         return true;

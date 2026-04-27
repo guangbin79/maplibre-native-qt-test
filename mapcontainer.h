@@ -519,4 +519,10 @@ private:
     int m_touchPointCount = 0;
     QList<QTouchEvent::TouchPoint> m_lastTouchPoints;
     QPointF m_lastMousePos;
+
+    // 复合手势状态识别：锁定主导手势，避免缩放/旋转互相干扰
+    enum class GestureMode { None, Scale, Rotate, Both };
+    GestureMode m_gestureMode = GestureMode::None;
+    qreal m_initialPinchDist = 0.0;    ///< 双指按下时的初始距离
+    qreal m_initialPinchAngle = 0.0;   ///< 双指按下时的初始角度
 };
