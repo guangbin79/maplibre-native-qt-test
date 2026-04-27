@@ -27,6 +27,7 @@
 #pragma once
 #include <QWidget>
 #include <QTouchEvent>
+#include <QTimer>
 #include <QMapLibre/Types>
 
 namespace QMapLibre {
@@ -546,4 +547,21 @@ private:
     qreal m_accumulatedRotation = 0.0; ///< 累积的角度变化
     int m_rotationSkipCounter = 0;     ///< 旋转帧跳过计数器
     int m_panSkipCounter = 0;          ///< 平移帧跳过计数器
+
+    // 双击检测：用于单指双击放大地图
+    qint64 m_lastTouchEndTime = 0;     ///< 上次触摸结束的时间戳（毫秒）
+    QPointF m_lastTouchEndPos;         ///< 上次触摸结束的位置
+    static constexpr qint64 DOUBLE_TAP_INTERVAL_MS = 300;  ///< 双击时间阈值（毫秒）
+    static constexpr qreal DOUBLE_TAP_DISTANCE_PX = 50.0;  ///< 双击距离阈值（像素）
+    static constexpr double MAX_ZOOM = 18.0;  ///< 地图最大缩放级别
+
+    // 双击放大动画
+    QTimer *m_doubleTapAnimTimer = nullptr;   ///< 双击放大动画定时器
+    int m_doubleTapAnimStep = 0;              ///< 当前动画步数
+    int m_doubleTapAnimTotalSteps = 8;        ///< 动画总步数
+    QPointF m_doubleTapAnimCenter;            ///< 双击放大的中心点
+    double m_doubleTapAnimTargetZoom = 0.0;   ///< 目标缩放级别
+
+private slots:
+    void onDoubleTapAnimStep();               ///< 双击放大动画单步处理
 };

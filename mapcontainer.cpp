@@ -130,6 +130,12 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // 这是触摸手势识别的前提条件
     // ============================================================
     setAttribute(Qt::WA_AcceptTouchEvents);
+
+    // 初始化双击放大动画定时器
+    m_doubleTapAnimTimer = new QTimer(this);
+    m_doubleTapAnimTimer->setInterval(20);
+    m_doubleTapAnimTimer->setSingleShot(false);
+    connect(m_doubleTapAnimTimer, &QTimer::timeout, this, &MapContainer::onDoubleTapAnimStep);
 }
 
 void MapContainer::setStyle(const QString &styleUrl) {
@@ -141,7 +147,7 @@ void MapContainer::setCenter(double lat, double lon) {
 }
 
 void MapContainer::setZoom(double zoom) {
-    m_glWidget->map()->setZoom(zoom);
+    m_glWidget->map()->setZoom(qBound(0.0, zoom, MAX_ZOOM));
 }
 
 void MapContainer::setBearing(double bearing) {
@@ -171,9 +177,27 @@ bool MapContainer::event(QEvent *event) {
     // ============================================================
     case QEvent::TouchBegin: {
         auto *touchEvent = static_cast<QTouchEvent *>(event);
+        const auto &points = touchEvent->points();
         m_touchActive = true;
-        m_touchPointCount = touchEvent->points().count();
-        m_lastTouchPoints = touchEvent->points();
+        m_touchPointCount = points.count();
+        m_lastTouchPoints = points;
+
+        // 双击检测：单指按下时检查是否与上次触摸结束构成双击
+        if (m_touchPointCount == 1) {
+            qint64 pressTime = static_cast<qint64>(points.first().pressTimestamp());
+            QPointF pos = points.first().position();
+            qint64 timeDelta = pressTime - m_lastTouchEndTime;
+            qreal dist = QLineF(pos, m_lastTouchEndPos).length();
+            if (timeDelta > 0 && timeDelta < DOUBLE_TAP_INTERVAL_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
+                m_doubleTapAnimCenter = pos;
+                m_doubleTapAnimTargetZoom = qMin(map()->zoom() + 1.0, MAX_ZOOM);
+                m_doubleTapAnimStep = 0;
+                m_doubleTapAnimTimer->start();
+                m_touchActive = false;
+                event->accept();
+                return true;
+            }
+        }
 
         // 双指按下时初始化手势识别状态
         if (m_touchPointCount == 2) {
@@ -181,8 +205,8 @@ bool MapContainer::event(QEvent *event) {
             m_accumulatedRotation = 0.0;
             m_rotationSkipCounter = 0;
             m_panSkipCounter = 0;
-            const auto &p1 = touchEvent->points().at(0).position();
-            const auto &p2 = touchEvent->points().at(1).position();
+            const auto &p1 = points.at(0).position();
+            const auto &p2 = points.at(1).position();
             m_initialPinchDist = QLineF(p1, p2).length();
             m_initialPinchAngle = QLineF(p1, p2).angle();
         }
@@ -303,6 +327,10 @@ bool MapContainer::event(QEvent *event) {
                         QPointF center = (p1 + p2) / 2.0;
                         map()->scaleBy(scaleFactor, center);
                         double newZoom = map()->zoom();
+                        if (newZoom > MAX_ZOOM) {
+                            map()->setZoom(MAX_ZOOM);
+                            newZoom = MAX_ZOOM;
+                        }
                         if (newZoom != m_lastZoom) {
                             m_lastZoom = newZoom;
                             emit zoomChanged(m_lastZoom);
@@ -365,6 +393,12 @@ bool MapContainer::event(QEvent *event) {
     // ============================================================
     case QEvent::TouchEnd:
     case QEvent::TouchCancel: {
+        // 记录双击检测信息（仅在单指触摸结束时）
+        if (m_touchPointCount == 1 && !m_lastTouchPoints.isEmpty()) {
+            m_lastTouchEndTime = static_cast<qint64>(m_lastTouchPoints.first().timestamp());
+            m_lastTouchEndPos = m_lastTouchPoints.first().position();
+        }
+
         m_touchActive = false;
         m_touchPointCount = 0;
         m_lastTouchPoints.clear();
@@ -442,4 +476,33 @@ void MapContainer::wheelEvent(QWheelEvent *event) {
         return;
     }
     QWidget::wheelEvent(event);
+}
+
+void MapContainer::onDoubleTapAnimStep() {
+    m_doubleTapAnimStep++;
+    double progress = static_cast<double>(m_doubleTapAnimStep) / m_doubleTapAnimTotalSteps;
+    progress = progress < 0.5 ? 2.0 * progress * progress : 1.0 - std::pow(-2.0 * progress + 2.0, 2) / 2.0;
+
+    double startZoom = m_doubleTapAnimTargetZoom - 1.0;
+    double expectedZoom = startZoom + (m_doubleTapAnimTargetZoom - startZoom) * progress;
+    double currentZoom = map()->zoom();
+
+    if (expectedZoom > currentZoom && currentZoom < MAX_ZOOM) {
+        double zoomDelta = qMin(expectedZoom - currentZoom, MAX_ZOOM - currentZoom);
+        double scaleFactor = std::pow(2.0, zoomDelta);
+        map()->scaleBy(scaleFactor, m_doubleTapAnimCenter);
+    }
+
+    double newZoom = map()->zoom();
+    if (newZoom != m_lastZoom) {
+        m_lastZoom = newZoom;
+        emit zoomChanged(m_lastZoom);
+    }
+
+    if (m_doubleTapAnimStep >= m_doubleTapAnimTotalSteps) {
+        m_doubleTapAnimTimer->stop();
+        if (map()->zoom() > MAX_ZOOM) {
+            map()->setZoom(MAX_ZOOM);
+        }
+    }
 }
