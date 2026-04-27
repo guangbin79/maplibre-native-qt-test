@@ -240,8 +240,9 @@ bool MapContainer::event(QEvent *event) {
             // 归一化到 [-180, 180]，处理 0°/360° 跨越
             while (angleDelta > 180.0) angleDelta -= 360.0;
             while (angleDelta < -180.0) angleDelta += 360.0;
-            // 阈值 2°：过滤微小抖动，避免误触发
-            if (std::abs(angleDelta) > 2.0) {
+            // 阈值 0.5°：过滤微小抖动，保持旋转灵敏度
+            if (std::abs(angleDelta) > 0.5) {
+                qDebug() << "[ROTATE] angleDelta=" << angleDelta << "bearing=" << map()->bearing();
                 map()->setBearing(map()->bearing() + angleDelta);
             }
 
