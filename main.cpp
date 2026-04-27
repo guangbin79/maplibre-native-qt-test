@@ -153,7 +153,11 @@ int main(int argc, char *argv[])
      *   - MainWindow 析构时会自动清理 MapLibre 资源和 OpenGL 上下文
      */
     MainWindow window;
+#ifdef IS_ANDROID
+    window.showFullScreen();
+#else
     window.show();
+#endif
 
     return app.exec();
 }

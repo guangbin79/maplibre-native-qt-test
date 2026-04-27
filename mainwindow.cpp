@@ -21,7 +21,9 @@ MainWindow::MainWindow(QWidget *parent)
     , m_controlPanel(nullptr)
 {
     setWindowTitle(QStringLiteral("Map Viewer"));
+#ifndef IS_ANDROID
     resize(1200, 800);
+#endif
 
     // ── 中央部件设置 ────────────────────────────────────────
     auto *central = new QWidget(this);
