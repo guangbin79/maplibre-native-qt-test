@@ -35,6 +35,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
+#include <QMessageBox>
 #include <QStandardPaths>
 
 #include "hxgisserver.h"
@@ -176,12 +177,22 @@ int main(int argc, char *argv[])
      *     从何处启动都能找到相对路径的数据目录。
      */
 #ifdef IS_ANDROID
-    QString rootPath = getExternalStorageRootPath();
     if (!hasManageExternalStoragePermission()) {
         requestManageExternalStoragePermission();
         qDebug() << "MANAGE_EXTERNAL_STORAGE not granted. Redirecting to system settings...";
     }
-    QDir().mkpath(rootPath);
+
+    QString rootPath = getExternalStorageRootPath();
+
+    if (!QDir(rootPath).exists()) {
+        QMessageBox::warning(nullptr, QStringLiteral("缺少地图数据"),
+            QStringLiteral("未找到地图数据目录：%1\n\n"
+                           "请在手机存储根目录创建 map_data 文件夹，"
+                           "并将地图数据拷贝到该目录后重启应用。")
+                .arg(rootPath));
+        return 1;
+    }
+
     qDebug() << "Android root path (external storage):" << rootPath;
 #else
     QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
