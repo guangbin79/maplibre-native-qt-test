@@ -176,12 +176,9 @@ bool MapContainer::event(QEvent *event) {
         // 双指按下时初始化手势识别状态
         if (m_touchPointCount == 2) {
             m_gestureMode = GestureMode::None;
-            const QPointF &p1 = m_lastTouchPoints.at(0).position();
-            const QPointF &p2 = m_lastTouchPoints.at(1).position();
-            m_initialPinchDist = QLineF(p1, p2).length();
-            m_initialPinchAngle = QLineF(p1, p2).angle();
             m_accumulatedRotation = 0.0;
             m_rotationSkipCounter = 0;
+            m_panSkipCounter = 0;
         }
 
         map()->setGestureInProgress(true);
@@ -294,7 +291,7 @@ bool MapContainer::event(QEvent *event) {
                 if (std::abs(angleDelta) > 0.5) {
                     m_accumulatedRotation += angleDelta;
                     ++m_rotationSkipCounter;
-                    if (m_rotationSkipCounter % 2 == 0 || std::abs(m_accumulatedRotation) > 2.0) {
+                    if (m_rotationSkipCounter % 3 == 0 || std::abs(m_accumulatedRotation) > 2.0) {
                         qint64 t1 = QDateTime::currentMSecsSinceEpoch();
                         map()->rotateBy(prevP1, p1);
                         qint64 t2 = QDateTime::currentMSecsSinceEpoch();
@@ -307,11 +304,13 @@ bool MapContainer::event(QEvent *event) {
             // ── 双指平移 ──
             QPointF centerDelta = ((p1 + p2) / 2.0) - ((prevP1 + prevP2) / 2.0);
             if (centerDelta.manhattanLength() > 0.5) {
-                map()->moveBy(centerDelta);
+                ++m_panSkipCounter;
+                if (m_panSkipCounter % 2 == 0) {
+                    map()->moveBy(centerDelta);
+                }
             }
         }
 
-        // 保存当前帧触摸点，供下一帧使用
         // 保存当前帧触摸点，供下一帧使用
         m_lastTouchPoints = points;
         event->accept();
@@ -339,9 +338,10 @@ bool MapContainer::event(QEvent *event) {
         m_touchActive = false;
         m_touchPointCount = 0;
         m_lastTouchPoints.clear();
-        m_gestureMode = GestureMode::None; // 手势结束，重置锁定状态
+        m_gestureMode = GestureMode::None;
         m_accumulatedRotation = 0.0;
         m_rotationSkipCounter = 0;
+        m_panSkipCounter = 0;
         map()->setGestureInProgress(false);
         emit touchEnd();
         event->accept();
