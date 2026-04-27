@@ -44,7 +44,6 @@
 
 #ifdef IS_ANDROID
 #include <QJniObject>
-#include <QNativeInterface/QAndroidApplication>
 
 /**
  * @brief 检查是否已获取 MANAGE_EXTERNAL_STORAGE 权限
@@ -74,7 +73,11 @@ bool hasManageExternalStoragePermission()
  */
 void requestManageExternalStoragePermission()
 {
-    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    QJniObject context = QJniObject::callStaticObjectMethod(
+        "org/qtproject/qt/android/QtNative",
+        "context",
+        "()Landroid/content/Context;"
+    );
     QJniObject packageName = context.callObjectMethod(
         "getPackageName",
         "()Ljava/lang/String;"
