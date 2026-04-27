@@ -36,6 +36,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QStandardPaths>
 
 #include "hxgisserver.h"
@@ -177,24 +178,45 @@ int main(int argc, char *argv[])
      *     从何处启动都能找到相对路径的数据目录。
      */
 #ifdef IS_ANDROID
-    if (!hasManageExternalStoragePermission()) {
+    // 循环检查 MANAGE_EXTERNAL_STORAGE 权限，直到用户授权或主动退出
+    while (!hasManageExternalStoragePermission()) {
         requestManageExternalStoragePermission();
-        QMessageBox::warning(nullptr, QStringLiteral("需要存储权限"),
-            QStringLiteral("本应用需要访问外部存储权限才能读取地图数据。\n\n"
-                           "请在系统设置中授予\"所有文件访问权限\"，"
-                           "然后重新启动应用。"));
-        return 1;
+
+        QMessageBox permissionBox;
+        permissionBox.setWindowTitle(QStringLiteral("需要存储权限"));
+        permissionBox.setText(QStringLiteral("本应用需要\"所有文件访问权限\"才能读取地图数据。\n\n"
+                                            "点击\"去授权\"跳转到系统设置，授予权限后返回点击\"已授权\"。"));
+        QPushButton *gotoBtn = permissionBox.addButton(QStringLiteral("去授权"), QMessageBox::ActionRole);
+        QPushButton *confirmBtn = permissionBox.addButton(QStringLiteral("已授权"), QMessageBox::AcceptRole);
+        QPushButton *exitBtn = permissionBox.addButton(QStringLiteral("退出"), QMessageBox::RejectRole);
+        permissionBox.exec();
+
+        if (permissionBox.clickedButton() == gotoBtn) {
+            requestManageExternalStoragePermission();
+        } else if (permissionBox.clickedButton() == exitBtn) {
+            return 1;
+        }
+        // 点击"已授权"则继续 while 条件检查
     }
 
     QString rootPath = getExternalStorageRootPath();
 
-    if (!QDir(rootPath).exists()) {
-        QMessageBox::warning(nullptr, QStringLiteral("缺少地图数据"),
-            QStringLiteral("未找到地图数据目录：%1\n\n"
-                           "请在手机存储根目录创建 map_data 文件夹，"
-                           "并将地图数据拷贝到该目录后重启应用。")
-                .arg(rootPath));
-        return 1;
+    // 循环检查数据目录，直到目录存在或用户主动退出
+    while (!QDir(rootPath).exists()) {
+        QMessageBox dataBox;
+        dataBox.setWindowTitle(QStringLiteral("缺少地图数据"));
+        dataBox.setText(QStringLiteral("未找到地图数据目录：%1\n\n"
+                                       "请在手机存储根目录创建 map_data 文件夹，"
+                                       "并将地图数据拷贝到该目录后点击\"已完成\"。")
+                            .arg(rootPath));
+        QPushButton *doneBtn = dataBox.addButton(QStringLiteral("已完成"), QMessageBox::AcceptRole);
+        QPushButton *exitBtn = dataBox.addButton(QStringLiteral("退出"), QMessageBox::RejectRole);
+        dataBox.exec();
+
+        if (dataBox.clickedButton() == exitBtn) {
+            return 1;
+        }
+        // 点击"已完成"则继续 while 条件检查
     }
 
     qDebug() << "Android root path (external storage):" << rootPath;
