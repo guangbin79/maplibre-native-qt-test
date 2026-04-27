@@ -75,8 +75,11 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // ============================================================
     QMapLibre::Map *m = m_glWidget->map();
     connect(m, &QMapLibre::Map::mapChanged, this, [this, m](QMapLibre::Map::MapChange change) {
-        // 只处理区域变化事件（包括动画和非动画）
-        if (change != QMapLibre::Map::MapChangeRegionDidChange &&
+        // 处理所有区域变化事件：WillChange / IsChanging / DidChange
+        // scaleBy/moveBy/rotateBy 等手势操作在过程中触发 IsChanging，结束后触发 DidChange
+        if (change != QMapLibre::Map::MapChangeRegionWillChange &&
+            change != QMapLibre::Map::MapChangeRegionIsChanging &&
+            change != QMapLibre::Map::MapChangeRegionDidChange &&
             change != QMapLibre::Map::MapChangeRegionDidChangeAnimated)
             return;
 
@@ -264,10 +267,18 @@ bool MapContainer::event(QEvent *event) {
                     scaleFactor = qBound(0.85, scaleFactor, 1.2);
                     QPointF center = (p1 + p2) / 2.0;
                     map()->scaleBy(scaleFactor, center);
+                    // scaleBy 后手动同步 zoom，因为 mapChanged 信号可能延迟或不触发
+                    double newZoom = map()->zoom();
+                    if (newZoom != m_lastZoom) {
+                        m_lastZoom = newZoom;
+                        emit zoomChanged(m_lastZoom);
+                    }
                 }
             }
 
             // ── 双指旋转 ──
+            // 使用 rotateBy() 替代 setBearing()：MapLibre 专为手势旋转设计的增量 API，
+            // 内部自动计算旋转中心并优化渲染路径，避免手动 angleDelta 计算和 bearing() getter 开销
             if (m_gestureMode == GestureMode::None ||
                 m_gestureMode == GestureMode::Rotate ||
                 m_gestureMode == GestureMode::Both) {
@@ -281,8 +292,7 @@ bool MapContainer::event(QEvent *event) {
                     ++m_rotationSkipCounter;
                     // 节流：每 2 帧或累积角度 > 2° 时应用，降低 zoom 8 渲染压力
                     if (m_rotationSkipCounter % 2 == 0 || std::abs(m_accumulatedRotation) > 2.0) {
-                        QPointF center = (p1 + p2) / 2.0;
-                        map()->setBearing(map()->bearing() + m_accumulatedRotation, center);
+                        map()->rotateBy(prevP1, p1);
                         m_accumulatedRotation = 0.0;
                     }
                 }
