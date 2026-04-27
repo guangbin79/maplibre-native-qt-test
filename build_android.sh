@@ -37,7 +37,8 @@ JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 ANDROID_PLATFORM="${ANDROID_PLATFORM:-android-33}"
 
 # Android NDK 路径（需与 Qt for Android 编译时使用的版本一致）
-ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/25.1.8937393}"
+# MapLibre SDK 使用 NDK 27 编译，必须使用匹配的 NDK 版本
+ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/27.1.12297006}"
 
 # Qt Android 工具链文件（由 Qt 安装提供，包含交叉编译所需的所有 CMake 配置）
 TOOLCHAIN="${QT_ANDROID_DIR}/lib/cmake/Qt6/qt.toolchain.cmake"

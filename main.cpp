@@ -54,10 +54,8 @@
  */
 bool hasManageExternalStoragePermission()
 {
-    QJniObject envClass("android/os/Environment");
-    if (!envClass.isValid())
-        return false;
-    jboolean isManager = envClass.callStaticMethod<jboolean>(
+    jboolean isManager = QJniObject::callStaticMethod<jboolean>(
+        "android/os/Environment",
         "isExternalStorageManager",
         "()Z"
     );
@@ -73,15 +71,18 @@ bool hasManageExternalStoragePermission()
  */
 void requestManageExternalStoragePermission()
 {
-    QJniObject context = QJniObject::callStaticObjectMethod(
+    QString packageName = QCoreApplication::applicationName();
+
+    // 获取当前 Activity 实例
+    QJniObject activity = QJniObject::callStaticObjectMethod(
         "org/qtproject/qt/android/QtNative",
-        "context",
-        "()Landroid/content/Context;"
+        "activity",
+        "()Landroid/app/Activity;"
     );
-    QJniObject packageName = context.callObjectMethod(
-        "getPackageName",
-        "()Ljava/lang/String;"
-    );
+    if (!activity.isValid()) {
+        qWarning() << "Failed to get Activity instance";
+        return;
+    }
 
     QJniObject intent(
         "android/content/Intent",
@@ -92,7 +93,7 @@ void requestManageExternalStoragePermission()
     );
 
     QJniObject uriString = QJniObject::fromString(
-        "package:" + packageName.toString()
+        "package:" + packageName
     );
     QJniObject uri = QJniObject::callStaticObjectMethod(
         "android/net/Uri",
@@ -107,7 +108,7 @@ void requestManageExternalStoragePermission()
         uri.object<jobject>()
     );
 
-    context.callMethod<void>(
+    activity.callMethod<void>(
         "startActivity",
         "(Landroid/content/Intent;)V",
         intent.object<jobject>()
