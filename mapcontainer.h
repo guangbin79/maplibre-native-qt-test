@@ -537,16 +537,22 @@ private:
     QList<QTouchEvent::TouchPoint> m_lastTouchPoints;
     QPointF m_lastMousePos;
 
-    // 复合手势状态识别：锁定主导手势，避免缩放/旋转互相干扰
-    enum class GestureMode { None, Scale, Rotate, Both };
+    // 复合手势状态识别：锁定主导手势，避免缩放/旋转/倾斜互相干扰
+    enum class GestureMode { None, Scale, Rotate, Pitch, Both };
     GestureMode m_gestureMode = GestureMode::None;
     qreal m_initialPinchDist = 0.0;    ///< 双指按下时的初始距离
     qreal m_initialPinchAngle = 0.0;   ///< 双指按下时的初始角度
+    QPointF m_initialPinchCenter;      ///< 双指按下时的初始中心点
 
     // 旋转累积与节流：降低渲染频率避免 zoom 8 卡顿
     qreal m_accumulatedRotation = 0.0; ///< 累积的角度变化
     int m_rotationSkipCounter = 0;     ///< 旋转帧跳过计数器
     int m_panSkipCounter = 0;          ///< 平移帧跳过计数器
+
+    // 倾斜手势参数
+    static constexpr double MIN_PITCH = 0.0;   ///< 最小倾斜角度
+    static constexpr double MAX_PITCH = 60.0;  ///< 最大倾斜角度
+    static constexpr qreal PITCH_SENSITIVITY = 0.15; ///< 倾斜灵敏度系数
 
     // 双击检测：用于单指双击放大地图
     qint64 m_lastTouchEndTime = 0;     ///< 上次触摸结束的时间戳（毫秒）

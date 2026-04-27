@@ -209,6 +209,7 @@ bool MapContainer::event(QEvent *event) {
             const auto &p2 = points.at(1).position();
             m_initialPinchDist = QLineF(p1, p2).length();
             m_initialPinchAngle = QLineF(p1, p2).angle();
+            m_initialPinchCenter = (p1 + p2) / 2.0;
         }
 
         map()->setGestureInProgress(true);
@@ -274,6 +275,7 @@ bool MapContainer::event(QEvent *event) {
             if (m_initialPinchDist <= 0.0) {
                 m_initialPinchDist = QLineF(p1, p2).length();
                 m_initialPinchAngle = QLineF(p1, p2).angle();
+                m_initialPinchCenter = (p1 + p2) / 2.0;
             }
 
             // 手势模式识别：前 3 帧内判断用户主导意图并锁定
@@ -286,7 +288,14 @@ bool MapContainer::event(QEvent *event) {
                 while (angleChange < -180.0) angleChange += 360.0;
                 angleChange = std::abs(angleChange);
 
-                if (distChange > 0.04 && angleChange < 5.0) {
+                QPointF currCenter = (p1 + p2) / 2.0;
+                QPointF centerDelta = currCenter - m_initialPinchCenter;
+                qreal absDx = std::abs(centerDelta.x());
+                qreal absDy = std::abs(centerDelta.y());
+
+                if (absDy > absDx * 0.5 && distChange < 0.20) {
+                    m_gestureMode = GestureMode::Pitch;
+                } else if (distChange > 0.04 && angleChange < 5.0) {
                     m_gestureMode = GestureMode::Scale;
                 } else if (angleChange > 5.0 && distChange < 0.04) {
                     m_gestureMode = GestureMode::Rotate;
@@ -295,8 +304,20 @@ bool MapContainer::event(QEvent *event) {
                 }
             }
 
-            // 复合手势优先级：锁定为 Rotate 时只执行旋转，暂停缩放和平移，避免 GPU 负载叠加
-            if (m_gestureMode == GestureMode::Rotate) {
+            if (m_gestureMode == GestureMode::Pitch) {
+                QPointF currCenter = (p1 + p2) / 2.0;
+                QPointF prevCenter = (prevP1 + prevP2) / 2.0;
+                qreal dy = currCenter.y() - prevCenter.y();
+                if (std::abs(dy) > 0.5) {
+                    double pitchDelta = -dy * PITCH_SENSITIVITY;
+                    double newPitch = qBound(MIN_PITCH, map()->pitch() + pitchDelta, MAX_PITCH);
+                    map()->setPitch(newPitch);
+                    if (newPitch != m_lastPitch) {
+                        m_lastPitch = newPitch;
+                        emit tiltChanged(m_lastPitch);
+                    }
+                }
+            } else if (m_gestureMode == GestureMode::Rotate) {
                 // ── 纯旋转模式 ──
                 QLineF currLine(p1, p2);
                 QLineF prevLine(prevP1, prevP2);
