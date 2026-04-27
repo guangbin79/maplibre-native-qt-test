@@ -525,4 +525,8 @@ private:
     GestureMode m_gestureMode = GestureMode::None;
     qreal m_initialPinchDist = 0.0;    ///< 双指按下时的初始距离
     qreal m_initialPinchAngle = 0.0;   ///< 双指按下时的初始角度
+
+    // 旋转累积与节流：降低渲染频率避免 zoom 8 卡顿
+    qreal m_accumulatedRotation = 0.0; ///< 累积的角度变化
+    int m_rotationSkipCounter = 0;     ///< 帧跳过计数器
 };

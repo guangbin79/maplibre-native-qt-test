@@ -173,6 +173,8 @@ bool MapContainer::event(QEvent *event) {
             const QPointF &p2 = m_lastTouchPoints.at(1).position();
             m_initialPinchDist = QLineF(p1, p2).length();
             m_initialPinchAngle = QLineF(p1, p2).angle();
+            m_accumulatedRotation = 0.0;
+            m_rotationSkipCounter = 0;
         }
 
         map()->setGestureInProgress(true);
@@ -275,7 +277,14 @@ bool MapContainer::event(QEvent *event) {
                 while (angleDelta > 180.0) angleDelta -= 360.0;
                 while (angleDelta < -180.0) angleDelta += 360.0;
                 if (std::abs(angleDelta) > 0.5) {
-                    map()->setBearing(map()->bearing() + angleDelta);
+                    m_accumulatedRotation += angleDelta;
+                    ++m_rotationSkipCounter;
+                    // 节流：每 2 帧或累积角度 > 2° 时应用，降低 zoom 8 渲染压力
+                    if (m_rotationSkipCounter % 2 == 0 || std::abs(m_accumulatedRotation) > 2.0) {
+                        QPointF center = (p1 + p2) / 2.0;
+                        map()->setBearing(map()->bearing() + m_accumulatedRotation, center);
+                        m_accumulatedRotation = 0.0;
+                    }
                 }
             }
 
@@ -309,6 +318,8 @@ bool MapContainer::event(QEvent *event) {
         m_touchPointCount = 0;
         m_lastTouchPoints.clear();
         m_gestureMode = GestureMode::None; // 手势结束，重置锁定状态
+        m_accumulatedRotation = 0.0;
+        m_rotationSkipCounter = 0;
         map()->setGestureInProgress(false);
         event->accept();
         return true;
