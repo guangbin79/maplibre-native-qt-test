@@ -179,6 +179,10 @@ bool MapContainer::event(QEvent *event) {
             m_accumulatedRotation = 0.0;
             m_rotationSkipCounter = 0;
             m_panSkipCounter = 0;
+            const auto &p1 = touchEvent->points().at(0).position();
+            const auto &p2 = touchEvent->points().at(1).position();
+            m_initialPinchDist = QLineF(p1, p2).length();
+            m_initialPinchAngle = QLineF(p1, p2).angle();
         }
 
         map()->setGestureInProgress(true);
@@ -240,6 +244,12 @@ bool MapContainer::event(QEvent *event) {
             const QPointF &prevP1 = m_lastTouchPoints.at(0).position();
             const QPointF &prevP2 = m_lastTouchPoints.at(1).position();
 
+            // 如果初始 pinch 参数未初始化（TouchBegin 只有 1 个点），在这里补初始化
+            if (m_initialPinchDist <= 0.0) {
+                m_initialPinchDist = QLineF(p1, p2).length();
+                m_initialPinchAngle = QLineF(p1, p2).angle();
+            }
+
             // 手势模式识别：前 3 帧内判断用户主导意图并锁定
             if (m_gestureMode == GestureMode::None && m_initialPinchDist > 10.0) {
                 qreal currDist = QLineF(p1, p2).length();
@@ -250,39 +260,18 @@ bool MapContainer::event(QEvent *event) {
                 while (angleChange < -180.0) angleChange += 360.0;
                 angleChange = std::abs(angleChange);
 
-                if (distChange > 0.06 && angleChange < 3.0) {
+                if (distChange > 0.04 && angleChange < 5.0) {
                     m_gestureMode = GestureMode::Scale;
-                } else if (angleChange > 3.0 && distChange < 0.06) {
+                } else if (angleChange > 5.0 && distChange < 0.04) {
                     m_gestureMode = GestureMode::Rotate;
-                } else if (distChange > 0.06 && angleChange > 3.0) {
+                } else if (distChange > 0.04 && angleChange > 5.0) {
                     m_gestureMode = GestureMode::Both;
                 }
             }
 
-            // ── 双指缩放 ──
-            if (m_gestureMode == GestureMode::None ||
-                m_gestureMode == GestureMode::Scale ||
-                m_gestureMode == GestureMode::Both) {
-                qreal currDist = QLineF(p1, p2).length();
-                qreal prevDist = QLineF(prevP1, prevP2).length();
-                if (prevDist > 10.0 && currDist > 10.0) {
-                    qreal scaleFactor = currDist / prevDist;
-                    scaleFactor = qBound(0.85, scaleFactor, 1.2);
-                    QPointF center = (p1 + p2) / 2.0;
-                    map()->scaleBy(scaleFactor, center);
-                    // scaleBy 后手动同步 zoom，因为 mapChanged 信号可能延迟或不触发
-                    double newZoom = map()->zoom();
-                    if (newZoom != m_lastZoom) {
-                        m_lastZoom = newZoom;
-                        emit zoomChanged(m_lastZoom);
-                    }
-                }
-            }
-
-            // ── 双指旋转 ──
-            if (m_gestureMode == GestureMode::None ||
-                m_gestureMode == GestureMode::Rotate ||
-                m_gestureMode == GestureMode::Both) {
+            // 复合手势优先级：锁定为 Rotate 时只执行旋转，暂停缩放和平移，避免 GPU 负载叠加
+            if (m_gestureMode == GestureMode::Rotate) {
+                // ── 纯旋转模式 ──
                 QLineF currLine(p1, p2);
                 QLineF prevLine(prevP1, prevP2);
                 qreal angleDelta = currLine.angle() - prevLine.angle();
@@ -299,14 +288,53 @@ bool MapContainer::event(QEvent *event) {
                         m_accumulatedRotation = 0.0;
                     }
                 }
-            }
+            } else {
+                // ── 缩放 + 平移模式（Scale / Both / None）──
+                if (m_gestureMode == GestureMode::None ||
+                    m_gestureMode == GestureMode::Scale ||
+                    m_gestureMode == GestureMode::Both) {
+                    qreal currDist = QLineF(p1, p2).length();
+                    qreal prevDist = QLineF(prevP1, prevP2).length();
+                    if (prevDist > 10.0 && currDist > 10.0) {
+                        qreal scaleFactor = currDist / prevDist;
+                        scaleFactor = qBound(0.85, scaleFactor, 1.2);
+                        QPointF center = (p1 + p2) / 2.0;
+                        map()->scaleBy(scaleFactor, center);
+                        double newZoom = map()->zoom();
+                        if (newZoom != m_lastZoom) {
+                            m_lastZoom = newZoom;
+                            emit zoomChanged(m_lastZoom);
+                        }
+                    }
+                }
 
-            // ── 双指平移 ──
-            QPointF centerDelta = ((p1 + p2) / 2.0) - ((prevP1 + prevP2) / 2.0);
-            if (centerDelta.manhattanLength() > 0.5) {
-                ++m_panSkipCounter;
-                if (m_panSkipCounter % 2 == 0) {
-                    map()->moveBy(centerDelta);
+                // ── 平移（所有非纯旋转模式都允许）──
+                QPointF centerDelta = ((p1 + p2) / 2.0) - ((prevP1 + prevP2) / 2.0);
+                if (centerDelta.manhattanLength() > 0.5) {
+                    ++m_panSkipCounter;
+                    if (m_panSkipCounter % 2 == 0) {
+                        map()->moveBy(centerDelta);
+                    }
+                }
+
+                // ── 旋转（仅在 Both / None 模式下执行）──
+                if (m_gestureMode == GestureMode::None || m_gestureMode == GestureMode::Both) {
+                    QLineF currLine(p1, p2);
+                    QLineF prevLine(prevP1, prevP2);
+                    qreal angleDelta = currLine.angle() - prevLine.angle();
+                    while (angleDelta > 180.0) angleDelta -= 360.0;
+                    while (angleDelta < -180.0) angleDelta += 360.0;
+                    if (std::abs(angleDelta) > 0.5) {
+                        m_accumulatedRotation += angleDelta;
+                        ++m_rotationSkipCounter;
+                        if (m_rotationSkipCounter % 3 == 0 || std::abs(m_accumulatedRotation) > 2.0) {
+                            qint64 t1 = QDateTime::currentMSecsSinceEpoch();
+                            map()->rotateBy(prevP1, p1);
+                            qint64 t2 = QDateTime::currentMSecsSinceEpoch();
+                            qDebug() << "[PERF] rotateBy() ms=" << (t2 - t1) << "zoom=" << map()->zoom() << "bearing=" << map()->bearing();
+                            m_accumulatedRotation = 0.0;
+                        }
+                    }
                 }
             }
         }
