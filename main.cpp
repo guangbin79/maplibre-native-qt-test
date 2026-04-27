@@ -11,7 +11,7 @@
  * │  2. 创建 QApplication                                         │
  * │         ↓                                                   │
  * │  3. 确定 GIS 数据根目录                                        │
- * │     ├─ Android: AppDataLocation（应用专属数据目录）             │
+     * │     ├─ Android: 外部存储 /sdcard/map_data（需授权）             │
  * │     └─ Linux:  可执行文件同目录下的 map_data/ 子目录           │
  * │         ↓                                                   │
  * │  4. 启动 HXGISServer（本地矢量瓦片服务）                       │
@@ -39,6 +39,97 @@
 
 #include "hxgisserver.h"
 #include "mainwindow.h"
+
+#ifdef IS_ANDROID
+#include <QJniObject>
+#include <QNativeInterface/QAndroidApplication>
+
+/**
+ * @brief 检查是否已获取 MANAGE_EXTERNAL_STORAGE 权限
+ *
+ * 通过调用 android.os.Environment.isExternalStorageManager() 判断。
+ * 该权限允许应用访问设备上所有文件（包括 SD 卡任意位置），
+ * 适用于企业内部分发应用（非 Google Play 渠道）。
+ */
+bool hasManageExternalStoragePermission()
+{
+    QJniObject envClass("android/os/Environment");
+    if (!envClass.isValid())
+        return false;
+    jboolean isManager = envClass.callStaticMethod<jboolean>(
+        "isExternalStorageManager",
+        "()Z"
+    );
+    return static_cast<bool>(isManager);
+}
+
+/**
+ * @brief 跳转到系统设置页请求 MANAGE_EXTERNAL_STORAGE 权限
+ *
+ * 启动 android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION Intent，
+ * 将用户带到"所有文件访问权限"设置页面。用户授权后返回应用，
+ * 下次启动即可检测到权限已授予。
+ */
+void requestManageExternalStoragePermission()
+{
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    QJniObject packageName = context.callObjectMethod(
+        "getPackageName",
+        "()Ljava/lang/String;"
+    );
+
+    QJniObject intent(
+        "android/content/Intent",
+        "(Ljava/lang/String;)V",
+        QJniObject::fromString(
+            "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION"
+        ).object<jstring>()
+    );
+
+    QJniObject uriString = QJniObject::fromString(
+        "package:" + packageName.toString()
+    );
+    QJniObject uri = QJniObject::callStaticObjectMethod(
+        "android/net/Uri",
+        "parse",
+        "(Ljava/lang/String;)Landroid/net/Uri;",
+        uriString.object<jstring>()
+    );
+
+    intent.callObjectMethod(
+        "setData",
+        "(Landroid/net/Uri;)Landroid/content/Intent;",
+        uri.object<jobject>()
+    );
+
+    context.callMethod<void>(
+        "startActivity",
+        "(Landroid/content/Intent;)V",
+        intent.object<jobject>()
+    );
+}
+
+/**
+ * @brief 获取外部存储上的 GIS 数据根目录
+ *
+ * 优先检查 /sdcard/map_data，其次 /storage/emulated/0/map_data。
+ * 若目录已存在则直接返回；否则返回 /sdcard/map_data（用户需自行放置数据）。
+ */
+QString getExternalStorageRootPath()
+{
+    QStringList candidates = {
+        QStringLiteral("/sdcard/map_data"),
+        QStringLiteral("/storage/emulated/0/map_data")
+    };
+
+    for (const QString &path : candidates) {
+        if (QDir(path).exists())
+            return path;
+    }
+
+    return QStringLiteral("/sdcard/map_data");
+}
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -71,13 +162,11 @@ int main(int argc, char *argv[])
      * GIS Server 需要一个 root_path 作为瓦片数据的存放/查找根目录。
      * 不同平台采用不同策略，原因如下：
      *
-     * Android - 使用 QStandardPaths::AppDataLocation：
-     *   - 原因：Android 应用只能写入应用专属目录（沙箱机制），无法访问
-     *     外部存储（如 /sdcard/）除非申请额外权限。
-     *   - AppDataLocation 返回的路径示例：
-     *     /data/data/<package_name>/files/
-     *     其中 <package_name> 如 org.qtproject.example.untitled
-     *   - 使用 mkpath() 确保目录存在，因为首次安装时该目录可能尚未创建。
+     * Android - 始终使用外部存储 /sdcard/map_data：
+     *   - 通过 MANAGE_EXTERNAL_STORAGE 权限访问 SD 卡任意位置，便于用户
+     *     直接拷贝地图数据到设备而无需通过 ADB push 到应用私有目录。
+     *   - 首次启动若未授权，自动跳转系统设置页引导用户授权，
+     *     始终不切换至 AppDataLocation，确保数据路径统一。
      *
      * Linux - 使用可执行文件同目录下的 map_data/ 子目录：
      *   - 原因：桌面开发/调试场景下，数据文件通常与可执行文件一起分发，
@@ -87,8 +176,13 @@ int main(int argc, char *argv[])
      *     从何处启动都能找到相对路径的数据目录。
      */
 #ifdef IS_ANDROID
-    QString rootPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(rootPath);  // 确保目录存在（Android 首次运行时可能不存在）
+    QString rootPath = getExternalStorageRootPath();
+    if (!hasManageExternalStoragePermission()) {
+        requestManageExternalStoragePermission();
+        qDebug() << "MANAGE_EXTERNAL_STORAGE not granted. Redirecting to system settings...";
+    }
+    QDir().mkpath(rootPath);
+    qDebug() << "Android root path (external storage):" << rootPath;
 #else
     QString rootPath = QCoreApplication::applicationDirPath() + "/map_data";
 #endif
