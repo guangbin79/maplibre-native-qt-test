@@ -222,26 +222,32 @@ bool MapContainer::event(QEvent *event) {
             const QPointF &prevP1 = m_lastTouchPoints.at(0).position();
             const QPointF &prevP2 = m_lastTouchPoints.at(1).position();
 
-            // 双指缩放: 距离比值计算
+            // ── 双指缩放 ──
             qreal currDist = QLineF(p1, p2).length();
             qreal prevDist = QLineF(prevP1, prevP2).length();
-            if (prevDist > 0 && currDist > 0) {
+            if (prevDist > 10.0 && currDist > 10.0) {
                 qreal scaleFactor = currDist / prevDist;
+                // 限制单帧缩放幅度，避免抖动和突变
+                scaleFactor = qBound(0.85, scaleFactor, 1.2);
                 QPointF center = (p1 + p2) / 2.0;
                 map()->scaleBy(scaleFactor, center);
             }
 
-            // 双指旋转: 角度差计算
+            // ── 双指旋转 ──
             QLineF currLine(p1, p2);
             QLineF prevLine(prevP1, prevP2);
             qreal angleDelta = currLine.angle() - prevLine.angle();
-            if (std::abs(angleDelta) > 0.1) {
-                map()->rotateBy(p1, p2);
+            // 归一化到 [-180, 180]，处理 0°/360° 跨越
+            while (angleDelta > 180.0) angleDelta -= 360.0;
+            while (angleDelta < -180.0) angleDelta += 360.0;
+            // 阈值 2°：过滤微小抖动，避免误触发
+            if (std::abs(angleDelta) > 2.0) {
+                map()->setBearing(map()->bearing() + angleDelta);
             }
 
-            // 双指平移: 中心点移动
+            // ── 双指平移 ──
             QPointF centerDelta = ((p1 + p2) / 2.0) - ((prevP1 + prevP2) / 2.0);
-            if (centerDelta.manhattanLength() > 0) {
+            if (centerDelta.manhattanLength() > 0.5) {
                 map()->moveBy(centerDelta);
             }
         }
