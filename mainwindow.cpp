@@ -19,6 +19,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_mapContainer(nullptr)
     , m_scaleBar(nullptr)
     , m_controlPanel(nullptr)
+    , m_annotationLayerToggle(nullptr)
 {
     setWindowTitle(QStringLiteral("Map Viewer"));
 #ifndef IS_ANDROID
@@ -53,6 +54,12 @@ MainWindow::MainWindow(QWidget *parent)
     // 比例尺 - 作为 MapContainer 的子部件，定位在左下角
     m_scaleBar = new ScaleBarWidget(m_mapContainer);
     repositionScaleBar();
+
+    // 标注图层开关 - 在控制面板中添加复选框
+    m_annotationLayerToggle = new QCheckBox(QStringLiteral("标注"), m_controlPanel);
+    m_annotationLayerToggle->setChecked(true);
+    m_annotationLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
+    m_controlPanel->layout()->addWidget(m_annotationLayerToggle);
 
     // ── 信号-槽连接 ─────────────────────────────────────────
 
@@ -91,6 +98,15 @@ MainWindow::MainWindow(QWidget *parent)
             this, [this]() { setGestureActive(true); });
     connect(m_mapContainer, &MapContainer::touchEnd,
             this, [this]() { setGestureActive(false); });
+
+    // 5. 标注图层开关
+    connect(m_annotationLayerToggle, &QCheckBox::toggled,
+            this, [this](bool checked) {
+        if (checked)
+            m_mapContainer->showAllAnnotations();
+        else
+            m_mapContainer->hideAllAnnotations();
+    });
 }
 
 /**

@@ -75,6 +75,12 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // ============================================================
     QMapLibre::Map *m = m_glWidget->map();
     connect(m, &QMapLibre::Map::mapChanged, this, [this, m](QMapLibre::Map::MapChange change) {
+        // 地图样式加载完成 → 通知标注管理器
+        if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
+            m_annotationManager->setMapReady(true);
+            return;
+        }
+
         // 处理所有区域变化事件：WillChange / IsChanging / DidChange
         // scaleBy/moveBy/rotateBy 等手势操作在过程中触发 IsChanging，结束后触发 DidChange
         if (change != QMapLibre::Map::MapChangeRegionWillChange &&
@@ -125,7 +131,12 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_lastLon = settings.defaultCoordinate().second;
 
     // ============================================================
-    // 步骤6: 启用触摸事件接收
+    // 步骤6: 创建标注管理器
+    // ============================================================
+    m_annotationManager = new AnnotationManager(m, this);
+
+    // ============================================================
+    // 步骤7: 启用触摸事件接收
     // Qt 默认不接收触摸事件，需要显式设置 WA_AcceptTouchEvents 属性
     // 这是触摸手势识别的前提条件
     // ============================================================
@@ -526,4 +537,53 @@ void MapContainer::onDoubleTapAnimStep() {
             map()->setZoom(MAX_ZOOM);
         }
     }
+}
+
+// ===== 标注管理委托方法 =====
+
+void MapContainer::setAnnotations(const QVector<MapAnnotation>& annotations,
+                                   const QMap<QString, QImage>& icons) {
+    m_annotationManager->setAnnotations(annotations, icons);
+}
+
+void MapContainer::clearAnnotations() {
+    m_annotationManager->clearAnnotations();
+}
+
+void MapContainer::addAnnotation(const MapAnnotation& annotation,
+                                  const QImage& icon) {
+    m_annotationManager->addAnnotation(annotation, icon);
+}
+
+void MapContainer::addAnnotations(const QVector<MapAnnotation>& annotations,
+                                   const QMap<QString, QImage>& icons) {
+    m_annotationManager->addAnnotations(annotations, icons);
+}
+
+void MapContainer::removeAnnotation(const QString& id) {
+    m_annotationManager->removeAnnotation(id);
+}
+
+void MapContainer::removeAnnotations(const QStringList& ids) {
+    m_annotationManager->removeAnnotations(ids);
+}
+
+void MapContainer::setVisibleIds(const QStringList& ids) {
+    m_annotationManager->setVisibleIds(ids);
+}
+
+void MapContainer::showAllAnnotations() {
+    m_annotationManager->showAllAnnotations();
+}
+
+void MapContainer::hideAllAnnotations() {
+    m_annotationManager->hideAllAnnotations();
+}
+
+QStringList MapContainer::allIds() const {
+    return m_annotationManager->allIds();
+}
+
+QStringList MapContainer::visibleIds() const {
+    return m_annotationManager->visibleIds();
 }

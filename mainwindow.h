@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QCheckBox>
 
 class MapContainer;
 class ScaleBarWidget;
@@ -65,4 +66,5 @@ private:
     ScaleBarWidget *m_scaleBar;
     /// 控制面板 - 提供地图参数调节滑块
     ControlPanelWidget *m_controlPanel;
+    QCheckBox *m_annotationLayerToggle;
 };

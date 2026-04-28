@@ -146,6 +146,10 @@ qt_add_executable(appuntitled
     scalebarwidget.cpp
     controlpanelwidget.h
     controlpanelwidget.cpp
+    geojsonbuilder.h
+    geojsonbuilder.cpp
+    annotationmanager.h
+    annotationmanager.cpp
 )
 
 # =============================================================================
@@ -264,3 +268,6 @@ else()
         WIN32_EXECUTABLE TRUE
     )
 endif()
+
+enable_testing()
+add_subdirectory(tests)

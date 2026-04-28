@@ -29,6 +29,8 @@
 #include <QTouchEvent>
 #include <QTimer>
 #include <QMapLibre/Types>
+#include "mapannotation.h"
+#include "annotationmanager.h"
 
 namespace QMapLibre {
 class GLWidget;
@@ -347,6 +349,22 @@ public:
      */
     void setPitch(double pitch);
 
+    // ===== 标注管理接口 =====
+    void setAnnotations(const QVector<MapAnnotation>& annotations,
+                        const QMap<QString, QImage>& icons);
+    void clearAnnotations();
+    void addAnnotation(const MapAnnotation& annotation,
+                       const QImage& icon = QImage());
+    void addAnnotations(const QVector<MapAnnotation>& annotations,
+                        const QMap<QString, QImage>& icons);
+    void removeAnnotation(const QString& id);
+    void removeAnnotations(const QStringList& ids);
+    void setVisibleIds(const QStringList& ids);
+    void showAllAnnotations();
+    void hideAllAnnotations();
+    QStringList allIds() const;
+    QStringList visibleIds() const;
+
 signals:
     /**
      * @brief 缩放级别变化信号
@@ -567,6 +585,8 @@ private:
     int m_doubleTapAnimTotalSteps = 8;        ///< 动画总步数
     QPointF m_doubleTapAnimCenter;            ///< 双击放大的中心点
     double m_doubleTapAnimTargetZoom = 0.0;   ///< 目标缩放级别
+
+    AnnotationManager* m_annotationManager = nullptr;
 
 private slots:
     void onDoubleTapAnimStep();               ///< 双击放大动画单步处理
