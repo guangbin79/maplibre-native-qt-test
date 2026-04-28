@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Test Widgets)
 
 # Set RPATH for Qt libraries at test runtime
 set(CMAKE_BUILD_RPATH "${CMAKE_PREFIX_PATH}/lib" "${Qt6_DIR}/../../../lib")
@@ -43,5 +43,15 @@ target_include_directories(tst_routemanager PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_routemanager PRIVATE Qt6::Test Qt6::Core Qt6::Gui QMapLibre::Core)
 add_test(NAME tst_routemanager COMMAND tst_routemanager)
 set_tests_properties(tst_routemanager PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
+)
+
+# tst_locationindicatormanager
+add_executable(tst_locationindicatormanager tst_locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp)
+target_include_directories(tst_locationindicatormanager PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_locationindicatormanager PRIVATE Qt6::Test Qt6::Widgets QMapLibre::Core)
+add_test(NAME tst_locationindicatormanager COMMAND tst_locationindicatormanager)
+set_tests_properties(tst_locationindicatormanager PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
 )

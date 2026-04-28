@@ -154,6 +154,8 @@ qt_add_executable(appuntitled
     routegeojsonbuilder.cpp
     routemanager.h
     routemanager.cpp
+    locationindicatormanager.h
+    locationindicatormanager.cpp
 )
 
 # =============================================================================

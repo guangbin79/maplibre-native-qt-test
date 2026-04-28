@@ -33,6 +33,8 @@
 #include "annotationmanager.h"
 #include "maproutesegment.h"
 #include "routemanager.h"
+#include "locationindicatormanager.h"
+#include <QLabel>
 
 namespace QMapLibre {
 class GLWidget;
@@ -380,6 +382,16 @@ public:
     QStringList allRouteIds() const;
     QStringList visibleRouteIds() const;
 
+    // ===== 位置指示器接口 =====
+    void setLocation(double lat, double lon);
+    void setLocationIcon(const QImage& icon);
+    void setLocationMode(LocationIndicatorManager::LocationMode mode);
+    LocationIndicatorManager::LocationMode locationMode() const;
+    void showLocation();
+    void hideLocation();
+    bool isLocationVisible() const;
+    void setCenterOffset(int bottomPixels);
+
 signals:
     /**
      * @brief 缩放级别变化信号
@@ -556,6 +568,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     QMapLibre::GLWidget *m_glWidget;
@@ -603,6 +616,8 @@ private:
 
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;
+    LocationIndicatorManager* m_locationIndicatorManager = nullptr;  ///< 位置指示器管理器
+    QLabel* m_locationOverlay = nullptr;                             ///< 固定中心模式的覆盖图标
 
 private slots:
     void onDoubleTapAnimStep();               ///< 双击放大动画单步处理

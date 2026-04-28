@@ -68,4 +68,5 @@ private:
     ControlPanelWidget *m_controlPanel;
     QCheckBox *m_annotationLayerToggle;
     QCheckBox *m_routeLayerToggle;
+    QCheckBox *m_locationLayerToggle;
 };

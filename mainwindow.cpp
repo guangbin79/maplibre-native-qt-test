@@ -21,6 +21,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_controlPanel(nullptr)
     , m_annotationLayerToggle(nullptr)
     , m_routeLayerToggle(nullptr)
+    , m_locationLayerToggle(nullptr)
 {
     setWindowTitle(QStringLiteral("Map Viewer"));
 #ifndef IS_ANDROID
@@ -66,6 +67,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_routeLayerToggle->setChecked(true);
     m_routeLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
     m_controlPanel->layout()->addWidget(m_routeLayerToggle);
+
+    m_locationLayerToggle = new QCheckBox(QStringLiteral("位置"), m_controlPanel);
+    m_locationLayerToggle->setChecked(false);
+    m_locationLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
+    m_controlPanel->layout()->addWidget(m_locationLayerToggle);
 
     // ── 信号-槽连接 ─────────────────────────────────────────
 
@@ -121,6 +127,15 @@ MainWindow::MainWindow(QWidget *parent)
             m_mapContainer->showAllRoutes();
         else
             m_mapContainer->hideAllRoutes();
+    });
+
+    // 7. 位置图层开关
+    connect(m_locationLayerToggle, &QCheckBox::toggled,
+            this, [this](bool checked) {
+        if (checked)
+            m_mapContainer->showLocation();
+        else
+            m_mapContainer->hideLocation();
     });
 }
 

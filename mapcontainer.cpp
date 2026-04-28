@@ -24,6 +24,7 @@
 #include <QMapLibre/Map>
 #include <QDateTime>
 #include <cmath>
+#include <QResizeEvent>
 
 MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     : QWidget(parent)
@@ -79,6 +80,7 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
         if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
             m_annotationManager->setMapReady(true);
             m_routeManager->setMapReady(true);
+            m_locationIndicatorManager->setMapReady(true);
             return;
         }
 
@@ -137,6 +139,17 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_annotationManager = new AnnotationManager(m, this);
 
     m_routeManager = new RouteManager(m, this);
+
+    // ============================================================
+    // 步骤8: 创建位置指示器管理器
+    // ============================================================
+    m_locationIndicatorManager = new LocationIndicatorManager(m, this);
+
+    m_locationOverlay = new QLabel(this);
+    m_locationOverlay->setFixedSize(40, 40);
+    m_locationOverlay->setStyleSheet(QStringLiteral("background: transparent;"));
+    m_locationOverlay->hide();
+    m_locationIndicatorManager->setOverlayWidget(m_locationOverlay);
 
     // ============================================================
     // 步骤7: 启用触摸事件接收
@@ -513,6 +526,12 @@ void MapContainer::wheelEvent(QWheelEvent *event) {
     QWidget::wheelEvent(event);
 }
 
+void MapContainer::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    if (m_locationIndicatorManager)
+        m_locationIndicatorManager->repositionOverlay();
+}
+
 void MapContainer::onDoubleTapAnimStep() {
     m_doubleTapAnimStep++;
     double progress = static_cast<double>(m_doubleTapAnimStep) / m_doubleTapAnimTotalSteps;
@@ -635,4 +654,38 @@ QStringList MapContainer::allRouteIds() const {
 
 QStringList MapContainer::visibleRouteIds() const {
     return m_routeManager->visibleRouteIds();
+}
+
+// ===== 位置指示器委托方法 =====
+
+void MapContainer::setLocation(double lat, double lon) {
+    m_locationIndicatorManager->setLocation(lat, lon);
+}
+
+void MapContainer::setLocationIcon(const QImage& icon) {
+    m_locationIndicatorManager->setLocationIcon(icon);
+}
+
+void MapContainer::setLocationMode(LocationIndicatorManager::LocationMode mode) {
+    m_locationIndicatorManager->setMode(mode);
+}
+
+LocationIndicatorManager::LocationMode MapContainer::locationMode() const {
+    return m_locationIndicatorManager->mode();
+}
+
+void MapContainer::showLocation() {
+    m_locationIndicatorManager->showLocation();
+}
+
+void MapContainer::hideLocation() {
+    m_locationIndicatorManager->hideLocation();
+}
+
+bool MapContainer::isLocationVisible() const {
+    return m_locationIndicatorManager->isLocationVisible();
+}
+
+void MapContainer::setCenterOffset(int bottomPixels) {
+    m_locationIndicatorManager->setCenterOffset(bottomPixels);
 }
