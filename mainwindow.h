@@ -67,4 +67,5 @@ private:
     /// 控制面板 - 提供地图参数调节滑块
     ControlPanelWidget *m_controlPanel;
     QCheckBox *m_annotationLayerToggle;
+    QCheckBox *m_routeLayerToggle;
 };

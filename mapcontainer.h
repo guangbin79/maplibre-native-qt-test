@@ -31,6 +31,8 @@
 #include <QMapLibre/Types>
 #include "mapannotation.h"
 #include "annotationmanager.h"
+#include "maproutesegment.h"
+#include "routemanager.h"
 
 namespace QMapLibre {
 class GLWidget;
@@ -365,6 +367,19 @@ public:
     QStringList allIds() const;
     QStringList visibleIds() const;
 
+    // ===== 线路管理接口 =====
+    void setRoutes(const QVector<MapRouteSegment>& segments);
+    void clearRoutes();
+    void addRouteSegment(const MapRouteSegment& segment);
+    void addRouteSegments(const QVector<MapRouteSegment>& segments);
+    void removeRouteSegment(const QString& id);
+    void removeRouteSegments(const QStringList& ids);
+    void setVisibleRouteIds(const QStringList& routeIds);
+    void showAllRoutes();
+    void hideAllRoutes();
+    QStringList allRouteIds() const;
+    QStringList visibleRouteIds() const;
+
 signals:
     /**
      * @brief 缩放级别变化信号
@@ -587,6 +602,7 @@ private:
     double m_doubleTapAnimTargetZoom = 0.0;   ///< 目标缩放级别
 
     AnnotationManager* m_annotationManager = nullptr;
+    RouteManager* m_routeManager = nullptr;
 
 private slots:
     void onDoubleTapAnimStep();               ///< 双击放大动画单步处理

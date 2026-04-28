@@ -24,3 +24,24 @@ add_test(NAME tst_annotationmanager COMMAND tst_annotationmanager)
 set_tests_properties(tst_annotationmanager PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
 )
+
+# tst_maproutesegment
+add_executable(tst_maproutesegment tst_maproutesegment.cpp)
+target_include_directories(tst_maproutesegment PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_maproutesegment PRIVATE Qt6::Test Qt6::Gui)
+add_test(NAME tst_maproutesegment COMMAND tst_maproutesegment)
+
+# tst_routegeojsonbuilder
+add_executable(tst_routegeojsonbuilder tst_routegeojsonbuilder.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp)
+target_include_directories(tst_routegeojsonbuilder PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_routegeojsonbuilder PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+add_test(NAME tst_routegeojsonbuilder COMMAND tst_routegeojsonbuilder)
+
+# tst_routemanager
+add_executable(tst_routemanager tst_routemanager.cpp ${CMAKE_SOURCE_DIR}/routemanager.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp)
+target_include_directories(tst_routemanager PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_routemanager PRIVATE Qt6::Test Qt6::Core Qt6::Gui QMapLibre::Core)
+add_test(NAME tst_routemanager COMMAND tst_routemanager)
+set_tests_properties(tst_routemanager PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
+)

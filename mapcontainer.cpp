@@ -78,6 +78,7 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
         // 地图样式加载完成 → 通知标注管理器
         if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
             m_annotationManager->setMapReady(true);
+            m_routeManager->setMapReady(true);
             return;
         }
 
@@ -134,6 +135,8 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // 步骤6: 创建标注管理器
     // ============================================================
     m_annotationManager = new AnnotationManager(m, this);
+
+    m_routeManager = new RouteManager(m, this);
 
     // ============================================================
     // 步骤7: 启用触摸事件接收
@@ -586,4 +589,50 @@ QStringList MapContainer::allIds() const {
 
 QStringList MapContainer::visibleIds() const {
     return m_annotationManager->visibleIds();
+}
+
+// ===== 线路管理委托方法 =====
+
+void MapContainer::setRoutes(const QVector<MapRouteSegment>& segments) {
+    m_routeManager->setSegments(segments);
+}
+
+void MapContainer::clearRoutes() {
+    m_routeManager->clearSegments();
+}
+
+void MapContainer::addRouteSegment(const MapRouteSegment& segment) {
+    m_routeManager->addRouteSegment(segment);
+}
+
+void MapContainer::addRouteSegments(const QVector<MapRouteSegment>& segments) {
+    m_routeManager->addRouteSegments(segments);
+}
+
+void MapContainer::removeRouteSegment(const QString& id) {
+    m_routeManager->removeRouteSegment(id);
+}
+
+void MapContainer::removeRouteSegments(const QStringList& ids) {
+    m_routeManager->removeRouteSegments(ids);
+}
+
+void MapContainer::setVisibleRouteIds(const QStringList& routeIds) {
+    m_routeManager->setVisibleRouteIds(routeIds);
+}
+
+void MapContainer::showAllRoutes() {
+    m_routeManager->showAllRoutes();
+}
+
+void MapContainer::hideAllRoutes() {
+    m_routeManager->hideAllRoutes();
+}
+
+QStringList MapContainer::allRouteIds() const {
+    return m_routeManager->allRouteIds();
+}
+
+QStringList MapContainer::visibleRouteIds() const {
+    return m_routeManager->visibleRouteIds();
 }

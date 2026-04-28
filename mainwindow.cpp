@@ -20,6 +20,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_scaleBar(nullptr)
     , m_controlPanel(nullptr)
     , m_annotationLayerToggle(nullptr)
+    , m_routeLayerToggle(nullptr)
 {
     setWindowTitle(QStringLiteral("Map Viewer"));
 #ifndef IS_ANDROID
@@ -60,6 +61,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_annotationLayerToggle->setChecked(true);
     m_annotationLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
     m_controlPanel->layout()->addWidget(m_annotationLayerToggle);
+
+    m_routeLayerToggle = new QCheckBox(QStringLiteral("线路"), m_controlPanel);
+    m_routeLayerToggle->setChecked(true);
+    m_routeLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
+    m_controlPanel->layout()->addWidget(m_routeLayerToggle);
 
     // ── 信号-槽连接 ─────────────────────────────────────────
 
@@ -106,6 +112,15 @@ MainWindow::MainWindow(QWidget *parent)
             m_mapContainer->showAllAnnotations();
         else
             m_mapContainer->hideAllAnnotations();
+    });
+
+    // 6. 线路图层开关
+    connect(m_routeLayerToggle, &QCheckBox::toggled,
+            this, [this](bool checked) {
+        if (checked)
+            m_mapContainer->showAllRoutes();
+        else
+            m_mapContainer->hideAllRoutes();
     });
 }
 

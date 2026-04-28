@@ -150,6 +150,10 @@ qt_add_executable(appuntitled
     geojsonbuilder.cpp
     annotationmanager.h
     annotationmanager.cpp
+    routegeojsonbuilder.h
+    routegeojsonbuilder.cpp
+    routemanager.h
+    routemanager.cpp
 )
 
 # =============================================================================
