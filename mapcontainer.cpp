@@ -163,6 +163,12 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_cameraAnimTimer->setInterval(16);  // ~60fps
     m_cameraAnimTimer->setSingleShot(false);
     connect(m_cameraAnimTimer, &QTimer::timeout, this, &MapContainer::onCameraAnimStep);
+
+    // GPS跟随平滑定时器
+    m_followTimer = new QTimer(this);
+    m_followTimer->setInterval(16);
+    m_followTimer->setSingleShot(false);
+    connect(m_followTimer, &QTimer::timeout, this, &MapContainer::onFollowStep);
 }
 
 void MapContainer::setStyle(const QString &styleUrl) {
@@ -631,7 +637,15 @@ QStringList MapContainer::visibleRouteIds() const {
 // ===== 位置指示器委托方法 =====
 
 void MapContainer::setLocation(double lat, double lon) {
+    m_followTargetLat = lat;
+    m_followTargetLon = lon;
     m_locationIndicatorManager->setLocation(lat, lon);
+
+    if (m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+        && !m_locationIndicatorManager->isFollowingPaused()) {
+        if (!m_followTimer->isActive())
+            m_followTimer->start();
+    }
 }
 
 void MapContainer::setLocationIcon(const QImage& icon) {
@@ -648,6 +662,12 @@ double MapContainer::locationRotation() const {
 
 void MapContainer::setLocationMode(LocationIndicatorManager::LocationMode mode) {
     m_locationIndicatorManager->setMode(mode);
+    if (mode == LocationIndicatorManager::LocationMode::Fixed) {
+        if (!m_locationIndicatorManager->isFollowingPaused())
+            m_followTimer->start();
+    } else {
+        m_followTimer->stop();
+    }
 }
 
 LocationIndicatorManager::LocationMode MapContainer::locationMode() const {
@@ -743,4 +763,21 @@ void MapContainer::onCameraAnimStep() {
 void MapContainer::stopCameraAnimation() {
     m_cameraAnimTimer->stop();
     m_cameraAnimStep = 0;
+}
+
+void MapContainer::onFollowStep() {
+    if (!m_locationIndicatorManager)
+        return;
+    if (m_locationIndicatorManager->mode() != LocationIndicatorManager::LocationMode::Fixed)
+        return;
+    if (m_locationIndicatorManager->isFollowingPaused())
+        return;
+
+    auto coord = map()->coordinate();
+    double lat = CameraMath::lerp(coord.first, m_followTargetLat, FOLLOW_LERP_FACTOR);
+    double lon = CameraMath::lerp(coord.second, m_followTargetLon, FOLLOW_LERP_FACTOR);
+
+    map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
+    m_lastLat = lat;
+    m_lastLon = lon;
 }

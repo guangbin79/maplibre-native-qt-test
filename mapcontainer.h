@@ -985,6 +985,11 @@ private:
     double m_animTargetPitch = 0.0;
     int m_defaultAnimDuration = 500;
 
+    QTimer* m_followTimer = nullptr;
+    double m_followTargetLat = 0.0;
+    double m_followTargetLon = 0.0;
+    static constexpr double FOLLOW_LERP_FACTOR = 0.15;
+
     void stopCameraAnimation();
 
     AnnotationManager* m_annotationManager = nullptr;
@@ -994,5 +999,6 @@ private:
 
 private slots:
     void onCameraAnimStep();
+    void onFollowStep();
 };
 
