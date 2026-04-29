@@ -41,6 +41,7 @@
 #include <QWidget>
 
 namespace QMapLibre { class Map; }
+class QLabel;
 
 /**
  * @brief 位置指示器管理器
