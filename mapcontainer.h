@@ -736,10 +736,49 @@ public:
      */
     void setCenterOffset(int bottomPixels);
 
-    // ===== Fixed 模式触屏暂停/恢复 =====
+    /**
+     * @brief 设置 Fixed 模式下是否允许触屏滑动地图
+     *
+     * 启用后，Fixed 模式下用户可触屏平移地图，地图跟随暂停；
+     * 松手后经过 setFixedTouchResumeTimeout() 设定的超时时间，
+     * 自动恢复 Fixed 模式并平滑飞回最新 GPS 位置。
+     * 禁用时，Fixed 模式下触屏滑动无效。
+     *
+     * @param enabled true 允许触屏滑动，false 禁止（默认 false）
+     *
+     * @code
+     * mapContainer->setFixedTouchPanEnabled(true);
+     * mapContainer->setFixedTouchResumeTimeout(3000);  // 3 秒后恢复
+     * @endcode
+     *
+     * @see isFixedTouchPanEnabled(), setFixedTouchResumeTimeout()
+     */
     void setFixedTouchPanEnabled(bool enabled);
+
+    /**
+     * @brief 查询 Fixed 模式下是否允许触屏滑动地图
+     * @return true 允许，false 禁止
+     * @see setFixedTouchPanEnabled()
+     */
     bool isFixedTouchPanEnabled() const;
+
+    /**
+     * @brief 设置触屏滑动后恢复 Fixed 模式的超时时间
+     *
+     * 用户松手后经过此时间（毫秒），自动从 Free 切回 Fixed 模式，
+     * 并通过 animateTo 平滑飞回最新 GPS 位置。
+     *
+     * @param ms 超时时间（毫秒），默认 3000
+     *
+     * @see fixedTouchResumeTimeout(), setFixedTouchPanEnabled()
+     */
     void setFixedTouchResumeTimeout(int ms);
+
+    /**
+     * @brief 获取触屏滑动后恢复 Fixed 模式的超时时间
+     * @return 超时时间（毫秒）
+     * @see setFixedTouchResumeTimeout()
+     */
     int fixedTouchResumeTimeout() const;
 
 signals:
