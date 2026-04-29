@@ -8,6 +8,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMargins>
+#include <QLabel>
+#include <QPixmap>
 
 LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject* parent)
     : QObject(parent)
@@ -48,6 +50,40 @@ void LocationIndicatorManager::setLocationIcon(const QImage& icon)
     const double dpr = QGuiApplication::primaryScreen() ? QGuiApplication::primaryScreen()->devicePixelRatio() : 1.0;
     QImage scaled = m_icon.scaledToWidth(static_cast<int>(m_icon.width() * dpr), Qt::SmoothTransformation);
     m_map->addImage("location-indicator-icon", scaled);
+}
+
+void LocationIndicatorManager::setLocationRotation(double degrees)
+{
+    m_rotation = degrees;
+
+    if (!m_ready || !m_map)
+        return;
+
+    if (m_mode == LocationMode::Free && m_layerSetup) {
+        m_map->setLayoutProperty("location-indicator-layer", "icon-rotate", m_rotation);
+    } else if (m_mode == LocationMode::Fixed && m_overlay && m_visible) {
+        if (m_icon.isNull())
+            return;
+
+        auto *label = qobject_cast<QLabel*>(m_overlay);
+        if (!label)
+            return;
+
+        QTransform transform;
+        transform.rotate(m_rotation);
+        QImage rotated = m_icon.transformed(transform, Qt::SmoothTransformation);
+
+        const double dpr = QGuiApplication::primaryScreen()
+                               ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                               : 1.0;
+        QImage scaled = rotated.scaledToWidth(static_cast<int>(m_icon.width() * dpr), Qt::SmoothTransformation);
+        label->setPixmap(QPixmap::fromImage(scaled));
+    }
+}
+
+double LocationIndicatorManager::locationRotation() const
+{
+    return m_rotation;
 }
 
 void LocationIndicatorManager::setMode(LocationMode mode)
@@ -126,6 +162,8 @@ void LocationIndicatorManager::ensureLayerSetup()
     m_map->setLayoutProperty("location-indicator-layer", "icon-anchor", "center");
     m_map->setLayoutProperty("location-indicator-layer", "icon-allow-overlap", true);
     m_map->setLayoutProperty("location-indicator-layer", "icon-ignore-placement", true);
+    m_map->setLayoutProperty("location-indicator-layer", "icon-rotate", m_rotation);
+    m_map->setLayoutProperty("location-indicator-layer", "icon-rotation-alignment", "map");
     m_map->setLayoutProperty("location-indicator-layer", "visibility", "none");
 
     m_layerSetup = true;
@@ -176,6 +214,19 @@ void LocationIndicatorManager::applyFixedMode()
     m_map->setMargins(QMargins(0, 0, 0, m_centerOffset));
     if (m_overlay) {
         repositionOverlay();
+        if (!m_icon.isNull()) {
+            auto *label = qobject_cast<QLabel*>(m_overlay);
+            if (label) {
+                QTransform transform;
+                transform.rotate(m_rotation);
+                QImage rotated = m_icon.transformed(transform, Qt::SmoothTransformation);
+                const double dpr = QGuiApplication::primaryScreen()
+                                       ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                                       : 1.0;
+                QImage scaled = rotated.scaledToWidth(static_cast<int>(m_icon.width() * dpr), Qt::SmoothTransformation);
+                label->setPixmap(QPixmap::fromImage(scaled));
+            }
+        }
         m_overlay->show();
     }
     if (m_layerSetup)

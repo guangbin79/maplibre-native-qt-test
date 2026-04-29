@@ -638,6 +638,14 @@ void MapContainer::setLocationIcon(const QImage& icon) {
     m_locationIndicatorManager->setLocationIcon(icon);
 }
 
+void MapContainer::setLocationRotation(double degrees) {
+    m_locationIndicatorManager->setLocationRotation(degrees);
+}
+
+double MapContainer::locationRotation() const {
+    return m_locationIndicatorManager->locationRotation();
+}
+
 void MapContainer::setLocationMode(LocationIndicatorManager::LocationMode mode) {
     m_locationIndicatorManager->setMode(mode);
 }

@@ -648,6 +648,34 @@ public:
     void setLocationIcon(const QImage& icon);
 
     /**
+     * @brief 设置位置指示器旋转角度
+     *
+     * 旋转图标，用于导航场景指示行进方向。
+     * - Free 模式：通过 MapLibre icon-rotate 属性旋转
+     * - Fixed 模式：通过 QTransform 旋转 overlay 图标
+     *
+     * @param degrees 旋转角度（度），0 表示图标朝上（北），顺时针增加
+     *
+     * @code
+     * // 设置图标指向东方（90度）
+     * mapContainer->setLocationRotation(90.0);
+     *
+     * // 根据 GPS 方向旋转
+     * mapContainer->setLocationRotation(gpsCourse);
+     * @endcode
+     *
+     * @see setLocationIcon(), locationRotation()
+     */
+    void setLocationRotation(double degrees);
+
+    /**
+     * @brief 获取当前位置指示器旋转角度
+     * @return 当前旋转角度（度）
+     * @see setLocationRotation()
+     */
+    double locationRotation() const;
+
+    /**
      * @brief 设置位置指示器模式
      *
      * - Free：图标渲染在地图坐标上，随地图移动（浏览模式）
