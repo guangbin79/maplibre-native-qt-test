@@ -158,11 +158,11 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // ============================================================
     setAttribute(Qt::WA_AcceptTouchEvents);
 
-    // 初始化双击放大动画定时器
-    m_doubleTapAnimTimer = new QTimer(this);
-    m_doubleTapAnimTimer->setInterval(20);
-    m_doubleTapAnimTimer->setSingleShot(false);
-    connect(m_doubleTapAnimTimer, &QTimer::timeout, this, &MapContainer::onDoubleTapAnimStep);
+    // 相机动画定时器
+    m_cameraAnimTimer = new QTimer(this);
+    m_cameraAnimTimer->setInterval(16);  // ~60fps
+    m_cameraAnimTimer->setSingleShot(false);
+    connect(m_cameraAnimTimer, &QTimer::timeout, this, &MapContainer::onCameraAnimStep);
 }
 
 void MapContainer::setStyle(const QString &styleUrl) {
@@ -203,6 +203,7 @@ bool MapContainer::event(QEvent *event) {
     // 4. accept() 事件，阻止事件继续向上层传播
     // ============================================================
     case QEvent::TouchBegin: {
+        stopCameraAnimation();
         auto *touchEvent = static_cast<QTouchEvent *>(event);
         const auto &points = touchEvent->points();
         m_touchActive = true;
@@ -217,9 +218,9 @@ bool MapContainer::event(QEvent *event) {
             qreal dist = QLineF(pos, m_lastTouchEndPos).length();
             if (timeDelta > 0 && timeDelta < DOUBLE_TAP_INTERVAL_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
                 m_doubleTapAnimCenter = pos;
-                m_doubleTapAnimTargetZoom = qMin(map()->zoom() + 1.0, MAX_ZOOM);
-                m_doubleTapAnimStep = 0;
-                m_doubleTapAnimTimer->start();
+                double targetZoom = qMin(map()->zoom() + 1.0, MAX_ZOOM);
+                QMapLibre::Coordinate center = map()->coordinate();
+                animateTo(center.first, center.second, targetZoom, map()->bearing(), map()->pitch(), 160);
                 m_touchActive = false;
                 event->accept();
                 return true;
@@ -532,35 +533,6 @@ void MapContainer::resizeEvent(QResizeEvent *event) {
         m_locationIndicatorManager->repositionOverlay();
 }
 
-void MapContainer::onDoubleTapAnimStep() {
-    m_doubleTapAnimStep++;
-    double progress = static_cast<double>(m_doubleTapAnimStep) / m_doubleTapAnimTotalSteps;
-    progress = progress < 0.5 ? 2.0 * progress * progress : 1.0 - std::pow(-2.0 * progress + 2.0, 2) / 2.0;
-
-    double startZoom = m_doubleTapAnimTargetZoom - 1.0;
-    double expectedZoom = startZoom + (m_doubleTapAnimTargetZoom - startZoom) * progress;
-    double currentZoom = map()->zoom();
-
-    if (expectedZoom > currentZoom && currentZoom < MAX_ZOOM) {
-        double zoomDelta = qMin(expectedZoom - currentZoom, MAX_ZOOM - currentZoom);
-        double scaleFactor = std::pow(2.0, zoomDelta);
-        map()->scaleBy(scaleFactor, m_doubleTapAnimCenter);
-    }
-
-    double newZoom = map()->zoom();
-    if (newZoom != m_lastZoom) {
-        m_lastZoom = newZoom;
-        emit zoomChanged(m_lastZoom);
-    }
-
-    if (m_doubleTapAnimStep >= m_doubleTapAnimTotalSteps) {
-        m_doubleTapAnimTimer->stop();
-        if (map()->zoom() > MAX_ZOOM) {
-            map()->setZoom(MAX_ZOOM);
-        }
-    }
-}
-
 // ===== 标注管理委托方法 =====
 
 void MapContainer::setAnnotations(const QVector<MapAnnotation>& annotations,
@@ -688,4 +660,79 @@ bool MapContainer::isLocationVisible() const {
 
 void MapContainer::setCenterOffset(int bottomPixels) {
     m_locationIndicatorManager->setCenterOffset(bottomPixels);
+}
+
+void MapContainer::setDefaultAnimationDuration(int ms) {
+    m_defaultAnimDuration = ms;
+}
+
+void MapContainer::animateTo(double lat, double lon, double zoom, double bearing, double pitch, int durationMs) {
+    int duration = (durationMs < 0) ? m_defaultAnimDuration : durationMs;
+
+    double targetZoom = CameraMath::clampedZoom(zoom);
+    double targetPitch = CameraMath::clampedPitch(pitch);
+
+    QMapLibre::Coordinate center = map()->coordinate();
+    double currentLat = center.first;
+    double currentLon = center.second;
+    double currentZoom = map()->zoom();
+    double currentBearing = map()->bearing();
+    double currentPitch = map()->pitch();
+
+    if (qFuzzyCompare(lat, currentLat) && qFuzzyCompare(lon, currentLon) &&
+        qFuzzyCompare(targetZoom, currentZoom) && qFuzzyCompare(bearing, currentBearing) &&
+        qFuzzyCompare(targetPitch, currentPitch)) {
+        emit animationFinished();
+        return;
+    }
+
+    stopCameraAnimation();
+
+    m_animStartLat = currentLat;
+    m_animStartLon = currentLon;
+    m_animStartZoom = currentZoom;
+    m_animStartBearing = currentBearing;
+    m_animStartPitch = currentPitch;
+    m_animTargetLat = lat;
+    m_animTargetLon = lon;
+    m_animTargetZoom = targetZoom;
+    m_animTargetBearing = bearing;
+    m_animTargetPitch = targetPitch;
+
+    m_cameraAnimTotalSteps = qMax(1, duration / 16);
+    m_cameraAnimStep = 0;
+
+    m_cameraAnimTimer->start();
+}
+
+void MapContainer::onCameraAnimStep() {
+    m_cameraAnimStep++;
+    double t = CameraMath::easeInOutQuad(static_cast<double>(m_cameraAnimStep) / m_cameraAnimTotalSteps);
+
+    double lat = CameraMath::lerp(m_animStartLat, m_animTargetLat, t);
+    double lon = CameraMath::lerp(m_animStartLon, m_animTargetLon, t);
+    double zoom = CameraMath::clampedZoom(CameraMath::lerp(m_animStartZoom, m_animTargetZoom, t));
+    double bearing = m_animStartBearing + CameraMath::bearingDelta(m_animStartBearing, m_animTargetBearing) * t;
+    double pitch = CameraMath::clampedPitch(CameraMath::lerp(m_animStartPitch, m_animTargetPitch, t));
+
+    map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
+    map()->setZoom(zoom);
+    map()->setBearing(bearing);
+    map()->setPitch(pitch);
+
+    m_lastLat = lat;
+    m_lastLon = lon;
+    m_lastZoom = zoom;
+    m_lastBearing = bearing;
+    m_lastPitch = pitch;
+
+    if (m_cameraAnimStep >= m_cameraAnimTotalSteps) {
+        stopCameraAnimation();
+        emit animationFinished();
+    }
+}
+
+void MapContainer::stopCameraAnimation() {
+    m_cameraAnimTimer->stop();
+    m_cameraAnimStep = 0;
 }

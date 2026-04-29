@@ -55,3 +55,9 @@ add_test(NAME tst_locationindicatormanager COMMAND tst_locationindicatormanager)
 set_tests_properties(tst_locationindicatormanager PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
 )
+
+# tst_cameraanimation
+add_executable(tst_cameraanimation tst_cameraanimation.cpp)
+target_include_directories(tst_cameraanimation PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_cameraanimation PRIVATE Qt6::Test Qt6::Core)
+add_test(NAME tst_cameraanimation COMMAND tst_cameraanimation)

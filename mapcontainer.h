@@ -34,6 +34,7 @@
 #include "maproutesegment.h"
 #include "routemanager.h"
 #include "locationindicatormanager.h"
+#include "cameraanimationmath.h"
 #include <QLabel>
 
 namespace QMapLibre {
@@ -353,6 +354,10 @@ public:
      */
     void setPitch(double pitch);
 
+    // ===== 相机动画接口 =====
+    void animateTo(double lat, double lon, double zoom, double bearing, double pitch, int durationMs = -1);
+    void setDefaultAnimationDuration(int ms);
+
     // ===== 标注管理接口 =====
     void setAnnotations(const QVector<MapAnnotation>& annotations,
                         const QMap<QString, QImage>& icons);
@@ -562,6 +567,8 @@ signals:
      */
     void centerChanged(double lat, double lon);
 
+    void animationFinished();
+
 protected:
     bool event(QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -607,12 +614,25 @@ private:
     static constexpr qreal DOUBLE_TAP_DISTANCE_PX = 50.0;  ///< 双击距离阈值（像素）
     static constexpr double MAX_ZOOM = 18.0;  ///< 地图最大缩放级别
 
-    // 双击放大动画
-    QTimer *m_doubleTapAnimTimer = nullptr;   ///< 双击放大动画定时器
-    int m_doubleTapAnimStep = 0;              ///< 当前动画步数
-    int m_doubleTapAnimTotalSteps = 8;        ///< 动画总步数
+    // 双击放大
     QPointF m_doubleTapAnimCenter;            ///< 双击放大的中心点
-    double m_doubleTapAnimTargetZoom = 0.0;   ///< 目标缩放级别
+
+    QTimer* m_cameraAnimTimer = nullptr;
+    int m_cameraAnimStep = 0;
+    int m_cameraAnimTotalSteps = 0;
+    double m_animStartLat = 0.0;
+    double m_animStartLon = 0.0;
+    double m_animStartZoom = 0.0;
+    double m_animStartBearing = 0.0;
+    double m_animStartPitch = 0.0;
+    double m_animTargetLat = 0.0;
+    double m_animTargetLon = 0.0;
+    double m_animTargetZoom = 0.0;
+    double m_animTargetBearing = 0.0;
+    double m_animTargetPitch = 0.0;
+    int m_defaultAnimDuration = 500;
+
+    void stopCameraAnimation();
 
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;
@@ -620,5 +640,6 @@ private:
     QLabel* m_locationOverlay = nullptr;                             ///< 固定中心模式的覆盖图标
 
 private slots:
-    void onDoubleTapAnimStep();               ///< 双击放大动画单步处理
+    void onCameraAnimStep();
 };
+
