@@ -184,10 +184,47 @@ public:
      */
     int centerOffset() const;
 
+    /**
+     * @brief 暂停/恢复 Fixed 模式的地图跟随
+     *
+     * 暂停后 setLocation 不会移动地图。
+     *
+     * @param paused true 表示暂停跟随，false 表示恢复跟随
+     *
+     * @see isFollowingPaused(), restoreFixedDisplay()
+     */
     void setFollowingPaused(bool paused);
+
+    /**
+     * @brief 查询当前跟随是否已暂停
+     * @return true 已暂停，false 未暂停
+     * @see setFollowingPaused()
+     */
     bool isFollowingPaused() const;
+
+    /**
+     * @brief 暂停时使用 — 隐藏 Fixed overlay，显示 symbol layer 图标在地图坐标上
+     *
+     * 将位置图标从屏幕固定位置切换到地图实际坐标位置显示。
+     *
+     * @see restoreFixedDisplay(), setFollowingPaused()
+     */
     void showLocationOnMap();
+
+    /**
+     * @brief 恢复 Fixed 显示 — 显示 overlay，隐藏 symbol layer
+     *
+     * 将位置图标从地图坐标位置切换回屏幕固定位置显示。
+     *
+     * @see showLocationOnMap(), setFollowingPaused()
+     */
     void restoreFixedDisplay();
+
+    /**
+     * @brief 获取当前 GPS 坐标
+     * @return 经纬度坐标对，first 为纬度，second 为经度
+     * @see setLocation()
+     */
     QPair<double, double> location() const;
 
     /**
