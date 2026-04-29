@@ -169,6 +169,18 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_followTimer->setInterval(16);
     m_followTimer->setSingleShot(false);
     connect(m_followTimer, &QTimer::timeout, this, &MapContainer::onFollowStep);
+
+    // Fixed模式触屏恢复定时器
+    m_fixedResumeTimer = new QTimer(this);
+    m_fixedResumeTimer->setSingleShot(true);
+    connect(m_fixedResumeTimer, &QTimer::timeout, this, [this]() {
+        if (!m_fixedPausedByTouch) return;
+        m_fixedPausedByTouch = false;
+        m_locationIndicatorManager->setFollowingPaused(false);
+        m_locationIndicatorManager->restoreFixedDisplay();
+        auto loc = m_locationIndicatorManager->location();
+        animateTo(loc.first, loc.second, map()->zoom(), map()->bearing(), map()->pitch(), 500);
+    });
 }
 
 void MapContainer::setStyle(const QString &styleUrl) {
@@ -209,6 +221,16 @@ bool MapContainer::event(QEvent *event) {
     // 4. accept() 事件，阻止事件继续向上层传播
     // ============================================================
     case QEvent::TouchBegin: {
+        // Fixed mode touch pan: pause following to allow free map browsing
+        if (m_fixedTouchPanEnabled
+            && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+            && m_locationIndicatorManager->isLocationVisible()) {
+            m_fixedResumeTimer->stop();
+            m_fixedPausedByTouch = true;
+            m_locationIndicatorManager->setFollowingPaused(true);
+            m_followTimer->stop();
+            m_locationIndicatorManager->showLocationOnMap();
+        }
         stopCameraAnimation();
         auto *touchEvent = static_cast<QTouchEvent *>(event);
         const auto &points = touchEvent->points();
@@ -462,6 +484,11 @@ bool MapContainer::event(QEvent *event) {
         m_rotationSkipCounter = 0;
         m_panSkipCounter = 0;
         map()->setGestureInProgress(false);
+        // Restart resume timer if touch pan paused the following
+        if (m_fixedPausedByTouch) {
+            m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
+            m_fixedResumeTimer->start();
+        }
         emit touchEnd();
         event->accept();
         return true;
@@ -688,6 +715,22 @@ bool MapContainer::isLocationVisible() const {
 
 void MapContainer::setCenterOffset(int bottomPixels) {
     m_locationIndicatorManager->setCenterOffset(bottomPixels);
+}
+
+void MapContainer::setFixedTouchPanEnabled(bool enabled) {
+    m_fixedTouchPanEnabled = enabled;
+}
+
+bool MapContainer::isFixedTouchPanEnabled() const {
+    return m_fixedTouchPanEnabled;
+}
+
+void MapContainer::setFixedTouchResumeTimeout(int ms) {
+    m_fixedTouchResumeTimeout = ms;
+}
+
+int MapContainer::fixedTouchResumeTimeout() const {
+    return m_fixedTouchResumeTimeout;
 }
 
 void MapContainer::setDefaultAnimationDuration(int ms) {

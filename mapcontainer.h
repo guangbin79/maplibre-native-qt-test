@@ -736,6 +736,12 @@ public:
      */
     void setCenterOffset(int bottomPixels);
 
+    // ===== Fixed 模式触屏暂停/恢复 =====
+    void setFixedTouchPanEnabled(bool enabled);
+    bool isFixedTouchPanEnabled() const;
+    void setFixedTouchResumeTimeout(int ms);
+    int fixedTouchResumeTimeout() const;
+
 signals:
     /**
      * @brief 缩放级别变化信号
@@ -989,6 +995,11 @@ private:
     double m_followTargetLat = 0.0;
     double m_followTargetLon = 0.0;
     static constexpr double FOLLOW_LERP_FACTOR = 0.15;
+
+    bool m_fixedTouchPanEnabled = false;
+    int m_fixedTouchResumeTimeout = 3000;
+    QTimer* m_fixedResumeTimer = nullptr;
+    bool m_fixedPausedByTouch = false;
 
     void stopCameraAnimation();
 
