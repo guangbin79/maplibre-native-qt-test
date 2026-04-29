@@ -260,6 +260,7 @@ private:
     QByteArray buildGeoJson() const;
     void applyFixedMode();
     void applyFreeMode();
+    void applyRotatedPixmap(QLabel *label);
 
     QMapLibre::Map* m_map;
     QWidget* m_overlay = nullptr;

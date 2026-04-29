@@ -67,15 +67,7 @@ void LocationIndicatorManager::setLocationRotation(double degrees)
         if (!label)
             return;
 
-        QTransform transform;
-        transform.rotate(m_rotation);
-        QImage rotated = m_icon.transformed(transform, Qt::SmoothTransformation);
-
-        const double dpr = QGuiApplication::primaryScreen()
-                               ? QGuiApplication::primaryScreen()->devicePixelRatio()
-                               : 1.0;
-        QImage scaled = rotated.scaledToWidth(static_cast<int>(m_icon.width() * dpr), Qt::SmoothTransformation);
-        label->setPixmap(QPixmap::fromImage(scaled));
+        applyRotatedPixmap(label);
     }
 }
 
@@ -215,14 +207,7 @@ void LocationIndicatorManager::applyFixedMode()
         if (!m_icon.isNull()) {
             auto *label = qobject_cast<QLabel*>(m_overlay);
             if (label) {
-                QTransform transform;
-                transform.rotate(m_rotation);
-                QImage rotated = m_icon.transformed(transform, Qt::SmoothTransformation);
-                const double dpr = QGuiApplication::primaryScreen()
-                                       ? QGuiApplication::primaryScreen()->devicePixelRatio()
-                                       : 1.0;
-                QImage scaled = rotated.scaledToWidth(static_cast<int>(m_icon.width() * dpr), Qt::SmoothTransformation);
-                label->setPixmap(QPixmap::fromImage(scaled));
+                applyRotatedPixmap(label);
             }
         }
         m_overlay->show();
@@ -243,6 +228,18 @@ void LocationIndicatorManager::applyFreeMode()
         rebuildSource();
         m_map->setLayoutProperty("location-indicator-layer", "visibility", "visible");
     }
+}
+
+void LocationIndicatorManager::applyRotatedPixmap(QLabel *label)
+{
+    QTransform transform;
+    transform.rotate(m_rotation);
+    QImage rotated = m_icon.transformed(transform, Qt::SmoothTransformation);
+    const double dpr = QGuiApplication::primaryScreen()
+                           ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                           : 1.0;
+    QImage scaled = rotated.scaledToWidth(static_cast<int>(m_icon.width() * dpr), Qt::SmoothTransformation);
+    label->setPixmap(QPixmap::fromImage(scaled));
 }
 
 void LocationIndicatorManager::repositionOverlay()
