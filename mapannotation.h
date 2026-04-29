@@ -35,7 +35,7 @@ struct MapAnnotation {
     double latitude = 0.0;   ///< 纬度 [-90, 90]
     double longitude = 0.0;  ///< 经度 [-180, 180]
     QString title;           ///< 标注文字
-    QString iconName;        ///< 图标名称，对应 icons map 中的 key
+    QString iconName;        ///< 图标名称，对应 setAnnotations() 的 icons QMap 参数中的 key
 
     /**
      * @brief 验证标注数据是否有效

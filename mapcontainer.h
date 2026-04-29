@@ -355,46 +355,357 @@ public:
     void setPitch(double pitch);
 
     // ===== 相机动画接口 =====
+
+    /**
+     * @brief 相机动画过渡（平滑飞到目标位置）
+     *
+     * 同时过渡 center/zoom/bearing/pitch 到目标值，使用 ease-in-out 缓动曲线。
+     * 约 60fps 帧率，bearing 自动选择最短旋转方向。
+     *
+     * 行为规则：
+     * - 新调用替换正在进行的动画（从中间位置开始）
+     * - 用户触摸/拖拽地图时自动取消动画
+     * - 目标值 == 当前值时立即 emit animationFinished()
+     * - bearing 350° → 10° 走正向 +20°（不走 -340°）
+     * - zoom 自动 clamp [0, 18]，pitch 自动 clamp [0°, 60°]
+     *
+     * @param lat       目标纬度 [-90, 90]
+     * @param lon       目标经度 [-180, 180]
+     * @param zoom      目标缩放级别 [0, 18]
+     * @param bearing   目标朝向角度 [0, 360)
+     * @param pitch     目标倾斜角度 [0, 60]
+     * @param durationMs 动画时长（毫秒），-1 表示使用全局默认值
+     *
+     * @code
+     * // 使用默认时长飞到北京
+     * mapContainer->animateTo(39.9042, 116.4074, 15.0, 0.0, 45.0);
+     *
+     * // 自定义 2 秒动画
+     * mapContainer->animateTo(31.23, 121.47, 12.0, 0.0, 0.0, 2000);
+     *
+     * // 修改全局默认时长为 1 秒
+     * mapContainer->setDefaultAnimationDuration(1000);
+     * @endcode
+     *
+     * @see setDefaultAnimationDuration(), animationFinished(), setCenter()
+     */
     void animateTo(double lat, double lon, double zoom, double bearing, double pitch, int durationMs = -1);
+
+    /**
+     * @brief 设置相机动画的默认时长
+     *
+     * 设置后，animateTo() 的 durationMs 参数传 -1 时使用此值。
+     *
+     * @param ms 默认动画时长（毫秒），默认 500ms
+     *
+     * @see animateTo()
+     */
     void setDefaultAnimationDuration(int ms);
 
     // ===== 标注管理接口 =====
+
+    /**
+     * @brief 批量设置标注（替换全部）
+     *
+     * 清除所有现有标注，用新的列表替换。同时注册所有需要的图标。
+     *
+     * @param annotations 标注列表，每个包含 id/latitude/longitude/title/iconName
+     * @param icons       图标映射表，key 对应 annotation.iconName，value 为 QImage
+     *
+     * @code
+     * QMap<QString, QImage> icons;
+     * icons["marker"] = QImage(":/icons/marker.png");
+     * icons["shop"] = QImage(":/icons/shop.png");
+     *
+     * QVector<MapAnnotation> anns = {
+     *     { .id="p1", .latitude=39.9, .longitude=116.4, .title="天安门", .iconName="marker" },
+     *     { .id="p2", .latitude=31.2, .longitude=121.5, .title="外滩", .iconName="shop" }
+     * };
+     * mapContainer->setAnnotations(anns, icons);
+     * @endcode
+     *
+     * @see addAnnotation(), removeAnnotation(), clearAnnotations()
+     */
     void setAnnotations(const QVector<MapAnnotation>& annotations,
                         const QMap<QString, QImage>& icons);
+
+    /**
+     * @brief 清除全部标注和图标
+     *
+     * 移除所有标注及其关联的图标资源。
+     *
+     * @see setAnnotations()
+     */
     void clearAnnotations();
+
+    /**
+     * @brief 添加单个标注
+     *
+     * @param annotation 标注数据
+     * @param icon       标注图标（如果 iconName 对应的图标尚未注册，需传入）
+     *
+     * @code
+     * MapAnnotation ann;
+     * ann.id = "poi-001";
+     * ann.latitude = 39.9042;
+     * ann.longitude = 116.4074;
+     * ann.title = "北京天安门";
+     * ann.iconName = "marker";
+     * mapContainer->addAnnotation(ann, QImage(":/icons/marker.png"));
+     * @endcode
+     *
+     * @see addAnnotations(), setAnnotations()
+     */
     void addAnnotation(const MapAnnotation& annotation,
                        const QImage& icon = QImage());
+
+    /**
+     * @brief 批量添加标注
+     *
+     * @param annotations 标注列表
+     * @param icons       需要注册的图标映射表
+     *
+     * @see addAnnotation(), setAnnotations()
+     */
     void addAnnotations(const QVector<MapAnnotation>& annotations,
                         const QMap<QString, QImage>& icons);
+
+    /**
+     * @brief 移除单个标注（按ID）
+     *
+     * @param id 标注唯一标识
+     *
+     * @see removeAnnotations(), clearAnnotations()
+     */
     void removeAnnotation(const QString& id);
+
+    /**
+     * @brief 批量移除标注（按ID列表）
+     *
+     * @param ids 标注ID列表
+     *
+     * @see removeAnnotation(), clearAnnotations()
+     */
     void removeAnnotations(const QStringList& ids);
+
+    /**
+     * @brief 设置可见标注（按ID白名单）
+     *
+     * 只有列表中的标注可见，其余隐藏。底层使用 MapLibre filter 表达式（~0.1ms）。
+     *
+     * @param ids 可见标注ID列表
+     *
+     * @code
+     * // 只显示这两个标注
+     * mapContainer->setVisibleIds({"poi-001", "poi-002"});
+     * @endcode
+     *
+     * @see showAllAnnotations(), hideAllAnnotations()
+     */
     void setVisibleIds(const QStringList& ids);
+
+    /**
+     * @brief 显示全部标注
+     * @see hideAllAnnotations(), setVisibleIds()
+     */
     void showAllAnnotations();
+
+    /**
+     * @brief 隐藏全部标注
+     * @see showAllAnnotations(), setVisibleIds()
+     */
     void hideAllAnnotations();
+
+    /**
+     * @brief 获取所有标注ID列表
+     * @return 所有已添加标注的ID
+     * @see visibleIds()
+     */
     QStringList allIds() const;
+
+    /**
+     * @brief 获取当前可见标注ID列表
+     * @return 当前可见标注的ID
+     * @see allIds(), setVisibleIds()
+     */
     QStringList visibleIds() const;
 
     // ===== 线路管理接口 =====
+
+    /**
+     * @brief 批量设置线路段（替换全部）
+     *
+     * 清除所有现有线路段，用新的列表替换。
+     * 多个段共享相同 routeId 会被视为同一条逻辑线路。
+     *
+     * @param segments 线路段列表
+     *
+     * @code
+     * QVector<MapRouteSegment> segs = {
+     *     { .id="s1", .routeId="route-A", .coordinates={{39.9,116.4},{39.92,116.38}},
+     *       .color=QColor("#FF5722"), .width=4.0, .dashed=false },
+     *     { .id="s2", .routeId="route-A", .coordinates={{39.92,116.38},{39.94,116.36}},
+     *       .color=QColor("#FF5722"), .width=4.0, .dashed=true }
+     * };
+     * mapContainer->setRoutes(segs);
+     * @endcode
+     *
+     * @see addRouteSegment(), clearRoutes(), MapRouteSegment
+     */
     void setRoutes(const QVector<MapRouteSegment>& segments);
+
+    /** @brief 清除全部线路段 @see setRoutes() */
     void clearRoutes();
+
+    /**
+     * @brief 添加单个线路段
+     * @param segment 线路段数据
+     * @see addRouteSegments(), setRoutes()
+     */
     void addRouteSegment(const MapRouteSegment& segment);
+
+    /**
+     * @brief 批量添加线路段
+     * @param segments 线路段列表
+     * @see addRouteSegment(), setRoutes()
+     */
     void addRouteSegments(const QVector<MapRouteSegment>& segments);
+
+    /**
+     * @brief 移除单个线路段（按段ID）
+     * @param id 线路段唯一标识
+     * @see removeRouteSegments(), clearRoutes()
+     */
     void removeRouteSegment(const QString& id);
+
+    /**
+     * @brief 批量移除线路段（按段ID列表）
+     * @param ids 线路段ID列表
+     * @see removeRouteSegment(), clearRoutes()
+     */
     void removeRouteSegments(const QStringList& ids);
+
+    /**
+     * @brief 设置可见线路（按线路ID白名单）
+     *
+     * 只有列表中 routeId 对应的线路段可见。底层使用 compound filter（~0.1ms）。
+     *
+     * @param routeIds 可见线路ID列表
+     *
+     * @code
+     * mapContainer->setVisibleRouteIds({"route-A", "route-B"});
+     * @endcode
+     *
+     * @see showAllRoutes(), hideAllRoutes()
+     */
     void setVisibleRouteIds(const QStringList& routeIds);
+
+    /** @brief 显示全部线路 @see hideAllRoutes(), setVisibleRouteIds() */
     void showAllRoutes();
+
+    /** @brief 隐藏全部线路 @see showAllRoutes(), setVisibleRouteIds() */
     void hideAllRoutes();
+
+    /**
+     * @brief 获取所有线路ID列表（去重后的 routeId）
+     * @return 所有不重复的 routeId
+     * @see visibleRouteIds()
+     */
     QStringList allRouteIds() const;
+
+    /**
+     * @brief 获取当前可见线路ID列表
+     * @return 当前可见线路的 routeId
+     * @see allRouteIds(), setVisibleRouteIds()
+     */
     QStringList visibleRouteIds() const;
 
     // ===== 位置指示器接口 =====
+
+    /**
+     * @brief 设置当前位置坐标
+     *
+     * 更新位置指示器的 GPS 坐标。
+     * - Free 模式：图标在地图上移到新坐标
+     * - Fixed 模式：地图平移使该坐标对准屏幕固定点
+     *
+     * @param lat 纬度 [-90, 90]
+     * @param lon 经度 [-180, 180]
+     *
+     * @see setLocationMode(), showLocation()
+     */
     void setLocation(double lat, double lon);
+
+    /**
+     * @brief 设置位置指示器图标
+     *
+     * @param icon 图标图片，建议使用正方形 PNG（带透明通道）
+     *
+     * @code
+     * mapContainer->setLocationIcon(QImage(":/icons/location_arrow.png"));
+     * @endcode
+     */
     void setLocationIcon(const QImage& icon);
+
+    /**
+     * @brief 设置位置指示器模式
+     *
+     * - Free：图标渲染在地图坐标上，随地图移动（浏览模式）
+     * - Fixed：图标固定在屏幕位置，地图跟随移动（导航模式）
+     *
+     * @param mode LocationMode::Free 或 LocationMode::Fixed
+     *
+     * @code
+     * // 切换到导航模式
+     * mapContainer->setLocationMode(LocationIndicatorManager::Fixed);
+     * // 切回浏览模式
+     * mapContainer->setLocationMode(LocationIndicatorManager::Free);
+     * @endcode
+     *
+     * @see LocationIndicatorManager::LocationMode
+     */
     void setLocationMode(LocationIndicatorManager::LocationMode mode);
+
+    /**
+     * @brief 获取当前位置指示器模式
+     * @return 当前 LocationMode
+     * @see setLocationMode()
+     */
     LocationIndicatorManager::LocationMode locationMode() const;
+
+    /**
+     * @brief 显示位置指示器
+     * @see hideLocation(), isLocationVisible()
+     */
     void showLocation();
+
+    /**
+     * @brief 隐藏位置指示器
+     * @see showLocation(), isLocationVisible()
+     */
     void hideLocation();
+
+    /**
+     * @brief 查询位置指示器是否可见
+     * @return true 可见，false 隐藏
+     */
     bool isLocationVisible() const;
+
+    /**
+     * @brief 设置 Fixed 模式的中心偏移量
+     *
+     * 将地图可视中心从视口正中心向下偏移指定像素数。
+     * 仅 Fixed 模式生效。
+     *
+     * @param bottomPixels 从视口底部向上的偏移像素数（如 200 表示中心在底部上方 200px）
+     *
+     * @code
+     * // 将中心点移到屏幕下方 1/3 位置（假设窗口高度 600px）
+     * mapContainer->setCenterOffset(200);
+     * @endcode
+     *
+     * @see setLocationMode()
+     */
     void setCenterOffset(int bottomPixels);
 
 signals:
@@ -567,6 +878,20 @@ signals:
      */
     void centerChanged(double lat, double lon);
 
+    /**
+     * @brief 相机动画完成信号
+     *
+     * 当 animateTo() 动画播放完毕时触发。
+     * 目标值 == 当前值时也会立即触发。
+     *
+     * @code
+     * connect(mapContainer, &MapContainer::animationFinished, []() {
+     *     qDebug() << "动画结束";
+     * });
+     * @endcode
+     *
+     * @see animateTo()
+     */
     void animationFinished();
 
 protected:
