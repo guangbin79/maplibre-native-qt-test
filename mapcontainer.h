@@ -995,6 +995,7 @@ private:
     double m_followTargetLat = 0.0;
     double m_followTargetLon = 0.0;
     static constexpr double FOLLOW_LERP_FACTOR = 0.15;
+    static constexpr int LOCATION_OVERLAY_SIZE = 40;  ///< 位置覆盖图标尺寸（像素）
 
     bool m_fixedTouchPanEnabled = false;
     int m_fixedTouchResumeTimeout = 3000;

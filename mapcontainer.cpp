@@ -146,7 +146,7 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_locationIndicatorManager = new LocationIndicatorManager(m, this);
 
     m_locationOverlay = new QLabel(this);
-    m_locationOverlay->setFixedSize(40, 40);
+    m_locationOverlay->setFixedSize(LOCATION_OVERLAY_SIZE, LOCATION_OVERLAY_SIZE);
     m_locationOverlay->setStyleSheet(QStringLiteral("background: transparent;"));
     m_locationOverlay->hide();
     m_locationIndicatorManager->setOverlayWidget(m_locationOverlay);
