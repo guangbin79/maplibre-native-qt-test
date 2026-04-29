@@ -184,6 +184,12 @@ public:
      */
     int centerOffset() const;
 
+    void setFollowingPaused(bool paused);
+    bool isFollowingPaused() const;
+    void showLocationOnMap();
+    void restoreFixedDisplay();
+    QPair<double, double> location() const;
+
     /**
      * @brief 通知地图就绪状态
      *
@@ -229,6 +235,7 @@ private:
     QImage m_icon;
     double m_rotation = 0.0;  ///< 当前旋转角度（度）
     int m_centerOffset = 0;
+    bool m_followingPaused = false;
 };
 
 #endif

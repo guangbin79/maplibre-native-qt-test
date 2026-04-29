@@ -32,9 +32,7 @@ void LocationIndicatorManager::setLocation(double lat, double lon)
     if (!m_ready)
         return;
 
-    if (m_mode == LocationMode::Fixed && m_visible && m_map) {
-        m_map->setCoordinate(QMapLibre::Coordinate(m_lat, m_lon));
-    } else if (m_mode == LocationMode::Free && m_visible) {
+    if (m_mode == LocationMode::Free && m_visible) {
         ensureLayerSetup();
         rebuildSource();
     }
@@ -231,7 +229,7 @@ void LocationIndicatorManager::applyFixedMode()
     }
     if (m_layerSetup)
         m_map->setLayoutProperty("location-indicator-layer", "visibility", "none");
-    if (m_visible)
+    if (m_visible && !m_followingPaused)
         m_map->setCoordinate(QMapLibre::Coordinate(m_lat, m_lon));
 }
 
@@ -258,4 +256,39 @@ void LocationIndicatorManager::repositionOverlay()
     int x = (pw - ow) / 2;
     int y = ph - m_centerOffset - oh / 2;
     m_overlay->move(x, y);
+}
+
+void LocationIndicatorManager::setFollowingPaused(bool paused)
+{
+    m_followingPaused = paused;
+}
+
+bool LocationIndicatorManager::isFollowingPaused() const
+{
+    return m_followingPaused;
+}
+
+QPair<double, double> LocationIndicatorManager::location() const
+{
+    return qMakePair(m_lat, m_lon);
+}
+
+void LocationIndicatorManager::showLocationOnMap()
+{
+    if (m_layerSetup && m_map) {
+        rebuildSource();
+        m_map->setLayoutProperty("location-indicator-layer", "visibility", "visible");
+    }
+    if (m_overlay)
+        m_overlay->hide();
+}
+
+void LocationIndicatorManager::restoreFixedDisplay()
+{
+    if (m_overlay) {
+        repositionOverlay();
+        m_overlay->show();
+    }
+    if (m_layerSetup && m_map)
+        m_map->setLayoutProperty("location-indicator-layer", "visibility", "none");
 }
