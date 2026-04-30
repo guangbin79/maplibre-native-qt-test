@@ -1012,6 +1012,15 @@ private:
     static constexpr qreal DOUBLE_TAP_DISTANCE_PX = 50.0;  ///< 双击距离阈值（像素）
     static constexpr double MAX_ZOOM = 18.0;  ///< 地图最大缩放级别
 
+    // 双指点击缩小检测
+    qint64 m_twoFingerTapStartTime = 0;    ///< 双指按下时的起始时间戳（第一指的 pressTimestamp）
+    QPointF m_twoFingerTapStartPos1;        ///< 双指按下时第一指位置
+    QPointF m_twoFingerTapStartPos2;        ///< 双指按下时第二指位置
+    qreal m_twoFingerTapInitialDist = 0.0;  ///< 双指按下时两指距离
+    static constexpr qint64 TWO_FINGER_TAP_DURATION_MS = 300;   ///< 双指点击最大持续时间（毫秒）
+    static constexpr qreal TWO_FINGER_TAP_MAX_DRIFT_PX = 30.0;  ///< 双指点击最大手指漂移距离（像素）
+    static constexpr qreal TWO_FINGER_TAP_DIST_CHANGE_RATIO = 0.15; ///< 双指点击最大距离变化比例（15%）
+
     // 双击放大
     QPointF m_doubleTapAnimCenter;            ///< 双击放大的中心点
 

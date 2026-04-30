@@ -266,6 +266,11 @@ bool MapContainer::event(QEvent *event) {
             m_initialPinchDist = QLineF(p1, p2).length();
             m_initialPinchAngle = QLineF(p1, p2).angle();
             m_initialPinchCenter = (p1 + p2) / 2.0;
+            // 记录双指点击检测的起始状态（使用第一指的 pressTimestamp）
+            m_twoFingerTapStartTime = static_cast<qint64>(points.at(0).pressTimestamp());
+            m_twoFingerTapStartPos1 = p1;
+            m_twoFingerTapStartPos2 = p2;
+            m_twoFingerTapInitialDist = m_initialPinchDist;
         }
 
         map()->setGestureInProgress(true);
@@ -474,6 +479,58 @@ bool MapContainer::event(QEvent *event) {
         if (m_touchPointCount == 1 && !m_lastTouchPoints.isEmpty()) {
             m_lastTouchEndTime = static_cast<qint64>(m_lastTouchPoints.first().timestamp());
             m_lastTouchEndPos = m_lastTouchPoints.first().position();
+        }
+
+        // 双指点击缩小检测：两指同时轻触后快速抬起，无明显移动
+        if (m_touchPointCount == 2
+            && m_gestureMode == GestureMode::None
+            && m_twoFingerTapStartTime > 0
+            && !m_lastTouchPoints.isEmpty()
+            && m_lastTouchPoints.count() >= 2) {
+            qint64 endTime = static_cast<qint64>(m_lastTouchPoints.first().timestamp());
+            qint64 duration = endTime - m_twoFingerTapStartTime;
+            if (duration > 0 && duration < TWO_FINGER_TAP_DURATION_MS) {
+                // 检查手指漂移距离
+                QPointF endPos1 = m_lastTouchPoints.at(0).position();
+                QPointF endPos2 = m_lastTouchPoints.at(1).position();
+                qreal drift1 = QLineF(m_twoFingerTapStartPos1, endPos1).length();
+                qreal drift2 = QLineF(m_twoFingerTapStartPos2, endPos2).length();
+                // 检查距离变化比例
+                qreal endDist = QLineF(endPos1, endPos2).length();
+                qreal distRatio = (m_twoFingerTapInitialDist > 10.0)
+                                  ? std::abs(endDist - m_twoFingerTapInitialDist) / m_twoFingerTapInitialDist
+                                  : 999.0;
+                if (drift1 < TWO_FINGER_TAP_MAX_DRIFT_PX
+                    && drift2 < TWO_FINGER_TAP_MAX_DRIFT_PX
+                    && distRatio < TWO_FINGER_TAP_DIST_CHANGE_RATIO) {
+                    // 检测到双指点击 → 缩小 1 级
+                    double targetZoom = qMax(map()->zoom() - 1.0, 0.0);
+                    if (targetZoom < map()->zoom()) {
+                        QMapLibre::Coordinate center = map()->coordinate();
+                        animateTo(center.first, center.second, targetZoom, map()->bearing(), map()->pitch(), 160);
+                    }
+                    // 防止手指抬起触发单指双击放大（交叉触发防护）
+                    m_lastTouchEndTime = 0;
+                    // 完整状态重置后提前返回
+                    m_touchActive = false;
+                    m_touchPointCount = 0;
+                    m_lastTouchPoints.clear();
+                    m_gestureMode = GestureMode::None;
+                    m_accumulatedRotation = 0.0;
+                    m_rotationSkipCounter = 0;
+                    m_panSkipCounter = 0;
+                    m_twoFingerTapStartTime = 0;
+                    map()->setGestureInProgress(false);
+                    if (m_fixedPausedByTouch) {
+                        m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
+                        m_fixedResumeTimer->start();
+                    }
+                    emit touchEnd();
+                    event->accept();
+                    return true;
+                }
+            }
+            m_twoFingerTapStartTime = 0; // 不是双指点击，重置
         }
 
         m_touchActive = false;
