@@ -156,6 +156,8 @@ qt_add_executable(appuntitled
     routemanager.cpp
     locationindicatormanager.h
     locationindicatormanager.cpp
+    testrunner.h
+    testrunner.cpp
 )
 
 # =============================================================================

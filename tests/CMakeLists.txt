@@ -61,3 +61,29 @@ add_executable(tst_cameraanimation tst_cameraanimation.cpp)
 target_include_directories(tst_cameraanimation PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_cameraanimation PRIVATE Qt6::Test Qt6::Core)
 add_test(NAME tst_cameraanimation COMMAND tst_cameraanimation)
+
+# tst_gui - GUI end-to-end test
+add_executable(tst_gui tst_gui.cpp
+    ${CMAKE_SOURCE_DIR}/mainwindow.cpp
+    ${CMAKE_SOURCE_DIR}/mapcontainer.cpp
+    ${CMAKE_SOURCE_DIR}/scalebarwidget.cpp
+    ${CMAKE_SOURCE_DIR}/controlpanelwidget.cpp
+    ${CMAKE_SOURCE_DIR}/hxgisserver.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/annotationmanager.cpp
+    ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/testrunner.cpp
+)
+target_include_directories(tst_gui PRIVATE ${CMAKE_SOURCE_DIR} ${HXGISSERVER_INCLUDE_DIR})
+target_link_directories(tst_gui PRIVATE ${HXGISSERVER_DIR})
+target_link_libraries(tst_gui PRIVATE
+    Qt6::Test Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets
+    QMapLibre::Widgets QMapLibre::Core
+    plugin-HXGISServer
+)
+add_test(NAME tst_gui COMMAND tst_gui)
+set_tests_properties(tst_gui PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
+)

@@ -5,6 +5,8 @@
 class MapContainer;
 class ScaleBarWidget;
 class ControlPanelWidget;
+class TestRunner;
+class QTextBrowser;
 
 /**
  * @brief 应用程序主窗口 - 架构概述
@@ -69,4 +71,7 @@ private:
     QCheckBox *m_annotationLayerToggle;
     QCheckBox *m_routeLayerToggle;
     QCheckBox *m_locationLayerToggle;
+
+    TestRunner *m_testRunner;
+    QTextBrowser *m_testLogView;
 };

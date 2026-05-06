@@ -23,6 +23,7 @@
 #include <QMapLibreWidgets/GLWidget>
 #include <QMapLibre/Map>
 #include <QDateTime>
+#include <QTimer>
 #include <cmath>
 #include <QResizeEvent>
 
@@ -64,92 +65,11 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     layout->addWidget(m_glWidget);
 
     // ============================================================
-    // 步骤4: 连接 mapChanged 信号进行状态跟踪
-    // QMapLibre::Map 使用单一的 mapChanged(MapChange) 信号而非每个属性的独立信号
-    // Region change 事件涵盖所有相机移动（缩放、旋转、倾斜、平移）
-    //
-    // 状态跟踪逻辑：
-    // 1. 仅处理 MapChangeRegionDidChange 和 MapChangeRegionDidChangeAnimated 事件
-    // 2. 将当前地图状态与上一次保存的状态对比
-    // 3. 如果发生变化，更新缓存值并发射对应的 Qt 信号通知外部
-    // 4. 这种设计避免了不必要的信号发射，优化性能
+    // 步骤4: 延迟连接 mapChanged 信号
+    // QMapLibre::GLWidget 构造时 map() 可能返回 nullptr，
+    // 需要等待 GL 上下文初始化完成后再连接信号
     // ============================================================
-    QMapLibre::Map *m = m_glWidget->map();
-    connect(m, &QMapLibre::Map::mapChanged, this, [this, m](QMapLibre::Map::MapChange change) {
-        // 地图样式加载完成 → 通知标注管理器
-        if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
-            m_annotationManager->setMapReady(true);
-            m_routeManager->setMapReady(true);
-            m_locationIndicatorManager->setMapReady(true);
-            return;
-        }
-
-        // 处理所有区域变化事件：WillChange / IsChanging / DidChange
-        // scaleBy/moveBy/rotateBy 等手势操作在过程中触发 IsChanging，结束后触发 DidChange
-        if (change != QMapLibre::Map::MapChangeRegionWillChange &&
-            change != QMapLibre::Map::MapChangeRegionIsChanging &&
-            change != QMapLibre::Map::MapChangeRegionDidChange &&
-            change != QMapLibre::Map::MapChangeRegionDidChangeAnimated)
-            return;
-
-        qint64 mapChangeStart = QDateTime::currentMSecsSinceEpoch();
-        // 检查并同步 zoom（缩放级别）
-        if (m->zoom() != m_lastZoom) {
-            m_lastZoom = m->zoom();
-            emit zoomChanged(m_lastZoom);
-        }
-        // 检查并同步 bearing（方位角/旋转角度）
-        if (m->bearing() != m_lastBearing) {
-            m_lastBearing = m->bearing();
-            emit bearingChanged(m_lastBearing);
-        }
-        // 检查并同步 pitch（倾斜角度）
-        if (m->pitch() != m_lastPitch) {
-            m_lastPitch = m->pitch();
-            emit tiltChanged(m_lastPitch);
-        }
-        // 检查并同步 center（中心坐标）
-        auto coord = m->coordinate();
-        if (coord.first != m_lastLat || coord.second != m_lastLon) {
-            m_lastLat = coord.first;
-            m_lastLon = coord.second;
-            emit centerChanged(coord.first, coord.second);
-        }
-        qint64 mapChangeEnd = QDateTime::currentMSecsSinceEpoch();
-        if ((mapChangeEnd - mapChangeStart) > 5) {
-            qDebug() << "[PERF] mapChanged handler ms=" << (mapChangeEnd - mapChangeStart)
-                     << "change=" << change;
-        }
-    });
-
-    // ============================================================
-    // 步骤5: 初始化状态缓存变量
-    // 这些变量用于 mapChanged 信号处理中的状态对比
-    // 初始值必须与 Settings 中配置的值保持一致
-    // ============================================================
-    m_lastZoom = settings.defaultZoom();
-    m_lastBearing = 0.0;
-    m_lastPitch = 0.0;
-    m_lastLat = settings.defaultCoordinate().first;
-    m_lastLon = settings.defaultCoordinate().second;
-
-    // ============================================================
-    // 步骤6: 创建标注管理器
-    // ============================================================
-    m_annotationManager = new AnnotationManager(m, this);
-
-    m_routeManager = new RouteManager(m, this);
-
-    // ============================================================
-    // 步骤8: 创建位置指示器管理器
-    // ============================================================
-    m_locationIndicatorManager = new LocationIndicatorManager(m, this);
-
-    m_locationOverlay = new QLabel(this);
-    m_locationOverlay->setFixedSize(LOCATION_OVERLAY_SIZE, LOCATION_OVERLAY_SIZE);
-    m_locationOverlay->setStyleSheet(QStringLiteral("background: transparent;"));
-    m_locationOverlay->hide();
-    m_locationIndicatorManager->setOverlayWidget(m_locationOverlay);
+    QTimer::singleShot(0, this, &MapContainer::connectMapSignals);
 
     // ============================================================
     // 步骤7: 启用触摸事件接收
@@ -863,6 +783,75 @@ void MapContainer::onCameraAnimStep() {
 void MapContainer::stopCameraAnimation() {
     m_cameraAnimTimer->stop();
     m_cameraAnimStep = 0;
+}
+
+void MapContainer::connectMapSignals()
+{
+    QMapLibre::Map *m = m_glWidget->map();
+    if (!m) {
+        qDebug() << "MapContainer: map() not ready, retrying in 100ms...";
+        QTimer::singleShot(100, this, &MapContainer::connectMapSignals);
+        return;
+    }
+
+    connect(m, &QMapLibre::Map::mapChanged, this, [this, m](QMapLibre::Map::MapChange change) {
+        if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
+            m_annotationManager->setMapReady(true);
+            m_routeManager->setMapReady(true);
+            m_locationIndicatorManager->setMapReady(true);
+            m_mapReady = true;
+            emit mapReady();
+            return;
+        }
+
+        if (change != QMapLibre::Map::MapChangeRegionWillChange &&
+            change != QMapLibre::Map::MapChangeRegionIsChanging &&
+            change != QMapLibre::Map::MapChangeRegionDidChange &&
+            change != QMapLibre::Map::MapChangeRegionDidChangeAnimated)
+            return;
+
+        qint64 mapChangeStart = QDateTime::currentMSecsSinceEpoch();
+        if (m->zoom() != m_lastZoom) {
+            m_lastZoom = m->zoom();
+            emit zoomChanged(m_lastZoom);
+        }
+        if (m->bearing() != m_lastBearing) {
+            m_lastBearing = m->bearing();
+            emit bearingChanged(m_lastBearing);
+        }
+        if (m->pitch() != m_lastPitch) {
+            m_lastPitch = m->pitch();
+            emit tiltChanged(m_lastPitch);
+        }
+        auto coord = m->coordinate();
+        if (coord.first != m_lastLat || coord.second != m_lastLon) {
+            m_lastLat = coord.first;
+            m_lastLon = coord.second;
+            emit centerChanged(coord.first, coord.second);
+        }
+        qint64 mapChangeEnd = QDateTime::currentMSecsSinceEpoch();
+        if ((mapChangeEnd - mapChangeStart) > 5) {
+            qDebug() << "[PERF] mapChanged handler ms=" << (mapChangeEnd - mapChangeStart)
+                     << "change=" << change;
+        }
+    });
+
+    m_lastZoom = m->zoom();
+    m_lastBearing = m->bearing();
+    m_lastPitch = m->pitch();
+    auto coord = m->coordinate();
+    m_lastLat = coord.first;
+    m_lastLon = coord.second;
+
+    m_annotationManager = new AnnotationManager(m, this);
+    m_routeManager = new RouteManager(m, this);
+    m_locationIndicatorManager = new LocationIndicatorManager(m, this);
+
+    m_locationOverlay = new QLabel(this);
+    m_locationOverlay->setFixedSize(LOCATION_OVERLAY_SIZE, LOCATION_OVERLAY_SIZE);
+    m_locationOverlay->setStyleSheet(QStringLiteral("background: transparent;"));
+    m_locationOverlay->hide();
+    m_locationIndicatorManager->setOverlayWidget(m_locationOverlay);
 }
 
 void MapContainer::onFollowStep() {

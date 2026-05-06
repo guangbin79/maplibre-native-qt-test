@@ -780,6 +780,7 @@ public:
      * @see setFixedTouchResumeTimeout()
      */
     int fixedTouchResumeTimeout() const;
+    bool isMapReady() const { return m_mapReady; }
 
 signals:
     /**
@@ -966,6 +967,7 @@ signals:
      * @see animateTo()
      */
     void animationFinished();
+    void mapReady();
 
 protected:
     bool event(QEvent *event) override;
@@ -1054,8 +1056,11 @@ private:
 
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;
-    LocationIndicatorManager* m_locationIndicatorManager = nullptr;  ///< 位置指示器管理器
-    QLabel* m_locationOverlay = nullptr;                             ///< 固定中心模式的覆盖图标
+    LocationIndicatorManager* m_locationIndicatorManager = nullptr;
+    QLabel* m_locationOverlay = nullptr;
+    bool m_mapReady = false;
+
+    void connectMapSignals();
 
 private slots:
     void onCameraAnimStep();
