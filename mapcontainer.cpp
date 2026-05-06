@@ -243,6 +243,15 @@ bool MapContainer::event(QEvent *event) {
 
         // 单指拖拽: 计算位置差并平移地图
         if (m_touchPointCount == 1 && m_lastTouchPoints.count() >= 1) {
+            // Fixed 模式且未启用触摸平移时，阻止单指拖动地图
+            if (!m_fixedTouchPanEnabled
+                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+                && m_locationIndicatorManager->isLocationVisible()) {
+                // 忽略拖动，只更新触摸点记录
+                m_lastTouchPoints = points;
+                event->accept();
+                return true;
+            }
             QPointF delta = points.first().position() - m_lastTouchPoints.first().position();
             map()->moveBy(delta);
         // 双指手势: 需要当前帧和上一帧都有两个触摸点
@@ -441,6 +450,8 @@ bool MapContainer::event(QEvent *event) {
                     m_panSkipCounter = 0;
                     m_twoFingerTapStartTime = 0;
                     map()->setGestureInProgress(false);
+                    // Fixed 模式暂停后，启动恢复定时器
+                    // 超时后自动恢复 Fixed 并飞回最新 GPS 位置
                     if (m_fixedPausedByTouch) {
                         m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
                         m_fixedResumeTimer->start();
@@ -461,7 +472,8 @@ bool MapContainer::event(QEvent *event) {
         m_rotationSkipCounter = 0;
         m_panSkipCounter = 0;
         map()->setGestureInProgress(false);
-        // Restart resume timer if touch pan paused the following
+        // Fixed 模式暂停后，启动恢复定时器
+        // 超时后自动恢复 Fixed 并飞回最新 GPS 位置
         if (m_fixedPausedByTouch) {
             m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
             m_fixedResumeTimer->start();

@@ -107,6 +107,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_mapContainer = new MapContainer(config, central);
     layout->addWidget(m_mapContainer, 1);
 
+    // 启用 Fixed 模式下的触摸平移暂停功能：
+    // 用户在 Fixed 模式下单指拖动地图时，自动暂停 Fixed 跟随（切换到 Free 显示），
+    // 松手后经过超时时间自动恢复 Fixed 模式。
+    m_mapContainer->setFixedTouchPanEnabled(true);
+    m_mapContainer->setFixedTouchResumeTimeout(3000);
+
     // 控制面板 - 固定宽度，容纳 API 演示按钮 (stretch=0)
     m_controlPanel = new ControlPanelWidget(central);
     m_controlPanel->setFixedWidth(panelWidth);
