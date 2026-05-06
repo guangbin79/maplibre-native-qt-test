@@ -202,18 +202,15 @@ void LocationIndicatorManager::applyFixedMode()
 {
     if (!m_map) return;
     m_map->setMargins(QMargins(0, 0, 0, m_centerOffset));
-    if (m_overlay) {
-        repositionOverlay();
-        if (!m_icon.isNull()) {
-            auto *label = qobject_cast<QLabel*>(m_overlay);
-            if (label) {
-                applyRotatedPixmap(label);
-            }
-        }
-        m_overlay->show();
+    // Fixed 模式下使用 symbol layer 在地图坐标上渲染标注，
+    // 通过 margins 偏移地图中心，使标注显示在屏幕特定位置。
+    // 这样缩放/旋转/倾斜时标注始终保持在正确的 GPS 坐标上。
+    if (m_overlay)
+        m_overlay->hide();
+    if (m_visible && m_layerSetup) {
+        rebuildSource();
+        m_map->setLayoutProperty("location-indicator-layer", "visibility", "visible");
     }
-    if (m_layerSetup)
-        m_map->setLayoutProperty("location-indicator-layer", "visibility", "none");
     if (m_visible && !m_followingPaused)
         m_map->setCoordinate(QMapLibre::Coordinate(m_lat, m_lon));
 }

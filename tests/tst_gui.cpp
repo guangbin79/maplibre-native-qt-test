@@ -32,6 +32,8 @@ private slots:
     void testRouteApi();
     void testLocationApi();
     void testAutoRunSequence();
+    void testFixedModePanBlocked();
+    void testFixedModePanAllowed();
 
 private:
     MainWindow *m_window = nullptr;
@@ -41,6 +43,8 @@ private:
 
     void captureScreenshot(const QString &name);
     void log(const QString &msg);
+
+    QMapLibre::Coordinate getMapCenter() const;
 };
 
 void GuiTest::initTestCase()
@@ -95,6 +99,11 @@ void GuiTest::captureScreenshot(const QString &name)
 void GuiTest::log(const QString &msg)
 {
     qDebug() << "[GUI_TEST]" << msg;
+}
+
+QMapLibre::Coordinate GuiTest::getMapCenter() const
+{
+    return m_map->map()->coordinate();
 }
 
 void GuiTest::testMapLoads()
@@ -361,6 +370,106 @@ void GuiTest::testAutoRunSequence()
     captureScreenshot("15_auto_test_complete");
 
     QVERIFY2(failed == 0, QStringLiteral("Auto-test had %1 failures").arg(failed).toUtf8());
+}
+
+void GuiTest::testFixedModePanBlocked()
+{
+    log("testFixedModePanBlocked: testing Fixed mode with pan disabled");
+
+    // Setup: show location in Fixed mode, disable touch pan
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_map->setLocationIcon(icon);
+    m_map->setLocation(36.75, 3.05);
+    m_map->showLocation();
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_map->setCenterOffset(200);
+    m_map->setFixedTouchPanEnabled(false);
+    QTest::qWait(2000);
+    captureScreenshot("16_fixed_pan_blocked_setup");
+
+    // Record coordinate before drag
+    QMapLibre::Coordinate before = getMapCenter();
+    log(QStringLiteral("Before drag: lat=%1 lon=%2").arg(before.first).arg(before.second));
+
+    // Simulate drag on the map widget
+    QWidget *mapWidget = m_map->findChild<QWidget*>();
+    QVERIFY(mapWidget != nullptr);
+    QPoint center = mapWidget->rect().center();
+
+    QTest::mousePress(mapWidget, Qt::LeftButton, {}, center);
+    QTest::mouseMove(mapWidget, center + QPoint(200, 0));
+    QTest::mouseRelease(mapWidget, Qt::LeftButton, {}, center + QPoint(200, 0));
+    QTest::qWait(1000);
+    captureScreenshot("17_fixed_pan_blocked_after");
+
+    // Record coordinate after drag
+    QMapLibre::Coordinate after = getMapCenter();
+    log(QStringLiteral("After drag: lat=%1 lon=%2").arg(after.first).arg(after.second));
+
+    // Verify map did NOT move (drag was blocked)
+    double latDiff = qAbs(after.first - before.first);
+    double lonDiff = qAbs(after.second - before.second);
+    log(QStringLiteral("Coordinate delta: lat=%1 lon=%2").arg(latDiff).arg(lonDiff));
+
+    QVERIFY2(latDiff < 0.0001 && lonDiff < 0.0001,
+             QStringLiteral("Map moved when drag should be blocked! delta=(%1, %2)")
+                 .arg(latDiff).arg(lonDiff).toUtf8());
+}
+
+void GuiTest::testFixedModePanAllowed()
+{
+    log("testFixedModePanAllowed: testing Fixed mode with pan enabled");
+
+    // Setup: show location in Fixed mode, enable touch pan
+    m_map->setFixedTouchPanEnabled(true);
+    m_map->setFixedTouchResumeTimeout(3000);
+    QTest::qWait(1000);
+    captureScreenshot("18_fixed_pan_allowed_setup");
+
+    // Record coordinate before drag
+    QMapLibre::Coordinate before = getMapCenter();
+    log(QStringLiteral("Before drag: lat=%1 lon=%2").arg(before.first).arg(before.second));
+
+    // Simulate drag on the map widget
+    QWidget *mapWidget = m_map->findChild<QWidget*>();
+    QVERIFY(mapWidget != nullptr);
+    QPoint center = mapWidget->rect().center();
+
+    QTest::mousePress(mapWidget, Qt::LeftButton, {}, center);
+    QTest::mouseMove(mapWidget, center + QPoint(200, 0));
+    QTest::mouseRelease(mapWidget, Qt::LeftButton, {}, center + QPoint(200, 0));
+    QTest::qWait(1000);
+    captureScreenshot("19_fixed_pan_allowed_after_drag");
+
+    // Record coordinate after drag
+    QMapLibre::Coordinate afterDrag = getMapCenter();
+    log(QStringLiteral("After drag: lat=%1 lon=%2").arg(afterDrag.first).arg(afterDrag.second));
+
+    // Verify map DID move (drag was allowed)
+    double dragLatDiff = qAbs(afterDrag.first - before.first);
+    double dragLonDiff = qAbs(afterDrag.second - before.second);
+    log(QStringLiteral("Drag delta: lat=%1 lon=%2").arg(dragLatDiff).arg(dragLonDiff));
+
+    QVERIFY2(dragLatDiff > 0.001 || dragLonDiff > 0.001,
+             "Map did not move when drag should be allowed!");
+
+    // Wait for auto-resume
+    log("Waiting for auto-resume...");
+    QTest::qWait(4000);
+    captureScreenshot("20_fixed_pan_allowed_after_resume");
+
+    QMapLibre::Coordinate afterResume = getMapCenter();
+    log(QStringLiteral("After resume: lat=%1 lon=%2").arg(afterResume.first).arg(afterResume.second));
+
+    // After resume, map should fly back to location (36.75, 3.05)
+    double resumeLatDiff = qAbs(afterResume.first - 36.75);
+    double resumeLonDiff = qAbs(afterResume.second - 3.05);
+    log(QStringLiteral("Resume delta from location: lat=%1 lon=%2").arg(resumeLatDiff).arg(resumeLonDiff));
+
+    QVERIFY2(resumeLatDiff < 0.01 && resumeLonDiff < 0.01,
+             QStringLiteral("Map did not resume to location! delta=(%1, %2)")
+                 .arg(resumeLatDiff).arg(resumeLonDiff).toUtf8());
 }
 
 QTEST_MAIN(GuiTest)

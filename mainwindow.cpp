@@ -110,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 启用 Fixed 模式下的触摸平移暂停功能：
     // 用户在 Fixed 模式下单指拖动地图时，自动暂停 Fixed 跟随（切换到 Free 显示），
     // 松手后经过超时时间自动恢复 Fixed 模式。
-    m_mapContainer->setFixedTouchPanEnabled(true);
+    m_mapContainer->setFixedTouchPanEnabled(false);
     m_mapContainer->setFixedTouchResumeTimeout(3000);
 
     // 控制面板 - 固定宽度，容纳 API 演示按钮 (stretch=0)
@@ -374,6 +374,26 @@ MainWindow::MainWindow(QWidget *parent)
     m_controlPanel->layout()->addWidget(btnLocFree);
     connect(btnLocFree, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+    });
+
+    // ── Fixed 模式拖动控制演示 ──
+    auto *btnFixedBlocked = new QPushButton(QStringLiteral("Fixed+不可拖动"), m_controlPanel);
+    btnFixedBlocked->setStyleSheet(QStringLiteral("QPushButton { background-color: #FF5722; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    m_controlPanel->layout()->addWidget(btnFixedBlocked);
+    connect(btnFixedBlocked, &QPushButton::clicked, this, [this]() {
+        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_mapContainer->setCenterOffset(200);
+        m_mapContainer->setFixedTouchPanEnabled(false);
+    });
+
+    auto *btnFixedAllowed = new QPushButton(QStringLiteral("Fixed+可拖动"), m_controlPanel);
+    btnFixedAllowed->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    m_controlPanel->layout()->addWidget(btnFixedAllowed);
+    connect(btnFixedAllowed, &QPushButton::clicked, this, [this]() {
+        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_mapContainer->setCenterOffset(200);
+        m_mapContainer->setFixedTouchPanEnabled(true);
+        m_mapContainer->setFixedTouchResumeTimeout(3000);
     });
 
     // ── 综合复位按钮 ──

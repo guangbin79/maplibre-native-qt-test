@@ -55,6 +55,7 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // GLWidget 是 QMapLibre 的 OpenGL 渲染组件，负责地图的底层渲染
     // ============================================================
     m_glWidget = new QMapLibre::GLWidget(settings);
+    m_glWidget->installEventFilter(this);
 
     // ============================================================
     // 步骤3: 设置布局
@@ -97,7 +98,6 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
         if (!m_fixedPausedByTouch) return;
         m_fixedPausedByTouch = false;
         m_locationIndicatorManager->setFollowingPaused(false);
-        m_locationIndicatorManager->restoreFixedDisplay();
         auto loc = m_locationIndicatorManager->location();
         animateTo(loc.first, loc.second, map()->zoom(), map()->bearing(), map()->pitch(), 500);
     });
@@ -127,6 +127,46 @@ QMapLibre::Map *MapContainer::map() const {
     return m_glWidget->map();
 }
 
+bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
+    if (obj == m_glWidget) {
+        switch (event->type()) {
+        case QEvent::MouseButtonPress:
+            if (!m_fixedTouchPanEnabled
+                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+                && m_locationIndicatorManager->isLocationVisible()) {
+                event->accept();
+                return true;
+            }
+            if (m_fixedTouchPanEnabled
+                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+                && m_locationIndicatorManager->isLocationVisible()) {
+                m_fixedResumeTimer->stop();
+                m_fixedPausedByTouch = true;
+                m_locationIndicatorManager->setFollowingPaused(true);
+                m_followTimer->stop();
+            }
+            break;
+        case QEvent::MouseMove:
+            if (!m_fixedTouchPanEnabled
+                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+                && m_locationIndicatorManager->isLocationVisible()) {
+                event->accept();
+                return true;
+            }
+            break;
+        case QEvent::MouseButtonRelease:
+            if (m_fixedPausedByTouch) {
+                m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
+                m_fixedResumeTimer->start();
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
 bool MapContainer::event(QEvent *event) {
     switch (event->type()) {
     // ============================================================
@@ -149,7 +189,6 @@ bool MapContainer::event(QEvent *event) {
             m_fixedPausedByTouch = true;
             m_locationIndicatorManager->setFollowingPaused(true);
             m_followTimer->stop();
-            m_locationIndicatorManager->showLocationOnMap();
         }
         stopCameraAnimation();
         auto *touchEvent = static_cast<QTouchEvent *>(event);
@@ -518,6 +557,25 @@ void MapContainer::mousePressEvent(QMouseEvent *event) {
         event->ignore();
         return;
     }
+
+    // Fixed 模式且未启用触摸平移时，阻止鼠标按下启动拖动
+    if (!m_fixedTouchPanEnabled
+        && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+        && m_locationIndicatorManager->isLocationVisible()) {
+        event->accept();
+        return;
+    }
+
+    // Fixed 模式下启用触摸平移时，鼠标按下暂停跟随并切换到地图坐标显示
+    if (m_fixedTouchPanEnabled
+        && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+        && m_locationIndicatorManager->isLocationVisible()) {
+        m_fixedResumeTimer->stop();
+        m_fixedPausedByTouch = true;
+        m_locationIndicatorManager->setFollowingPaused(true);
+        m_followTimer->stop();
+    }
+
     QWidget::mousePressEvent(event);
 }
 
@@ -527,6 +585,15 @@ void MapContainer::mouseMoveEvent(QMouseEvent *event) {
         event->ignore();
         return;
     }
+
+    // Fixed 模式且未启用触摸平移时，阻止鼠标拖动地图
+    if (!m_fixedTouchPanEnabled
+        && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+        && m_locationIndicatorManager->isLocationVisible()) {
+        event->accept();
+        return;
+    }
+
     QWidget::mouseMoveEvent(event);
 }
 
@@ -536,6 +603,13 @@ void MapContainer::mouseReleaseEvent(QMouseEvent *event) {
         event->ignore();
         return;
     }
+
+    // Fixed 模式暂停后，启动恢复定时器
+    if (m_fixedPausedByTouch) {
+        m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
+        m_fixedResumeTimer->start();
+    }
+
     QWidget::mouseReleaseEvent(event);
 }
 
