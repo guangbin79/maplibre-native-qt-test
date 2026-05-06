@@ -361,14 +361,6 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->hideLocation();
     });
 
-    auto *btnLocFixed = new QPushButton(QStringLiteral("Fixed模式"), m_controlPanel);
-    btnLocFixed->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnLocFixed);
-    connect(btnLocFixed, &QPushButton::clicked, this, [this]() {
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(200);
-    });
-
     auto *btnLocFree = new QPushButton(QStringLiteral("Free模式"), m_controlPanel);
     btnLocFree->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     m_controlPanel->layout()->addWidget(btnLocFree);
@@ -382,7 +374,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_controlPanel->layout()->addWidget(btnFixedBlocked);
     connect(btnFixedBlocked, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(200);
+        m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(false);
     });
 
@@ -391,7 +383,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_controlPanel->layout()->addWidget(btnFixedAllowed);
     connect(btnFixedAllowed, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(200);
+        m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
         m_mapContainer->setFixedTouchResumeTimeout(3000);
     });

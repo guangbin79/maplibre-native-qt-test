@@ -333,7 +333,7 @@ void GuiTest::testLocationApi()
     QVERIFY(m_map->isLocationVisible());
 
     m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
+    m_map->setCenterOffset(400);
     QTest::qWait(1000);
     captureScreenshot("12_location_fixed");
     QCOMPARE(m_map->locationMode(), LocationIndicatorManager::LocationMode::Fixed);
@@ -383,7 +383,7 @@ void GuiTest::testFixedModePanBlocked()
     m_map->setLocation(36.75, 3.05);
     m_map->showLocation();
     m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
+    m_map->setCenterOffset(400);
     m_map->setFixedTouchPanEnabled(false);
     QTest::qWait(2000);
     captureScreenshot("16_fixed_pan_blocked_setup");

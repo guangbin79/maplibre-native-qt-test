@@ -128,40 +128,47 @@ QMapLibre::Map *MapContainer::map() const {
 }
 
 bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
-    if (obj == m_glWidget) {
-        switch (event->type()) {
-        case QEvent::MouseButtonPress:
-            if (!m_fixedTouchPanEnabled
-                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-                && m_locationIndicatorManager->isLocationVisible()) {
+    if (obj == m_glWidget && m_locationIndicatorManager) {
+        bool isFixedBlocked = !m_fixedTouchPanEnabled
+            && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
+            && m_locationIndicatorManager->isLocationVisible();
+
+        if (isFixedBlocked) {
+            switch (event->type()) {
+            case QEvent::MouseButtonPress:
+            case QEvent::MouseMove:
+            case QEvent::MouseButtonRelease:
+            case QEvent::Wheel:
+            case QEvent::TouchBegin:
+            case QEvent::TouchUpdate:
+            case QEvent::TouchEnd:
                 event->accept();
                 return true;
+            default:
+                break;
             }
-            if (m_fixedTouchPanEnabled
+        } else {
+            bool isFixedAllowed = m_fixedTouchPanEnabled
                 && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-                && m_locationIndicatorManager->isLocationVisible()) {
-                m_fixedResumeTimer->stop();
-                m_fixedPausedByTouch = true;
-                m_locationIndicatorManager->setFollowingPaused(true);
-                m_followTimer->stop();
+                && m_locationIndicatorManager->isLocationVisible();
+            switch (event->type()) {
+            case QEvent::MouseButtonPress:
+                if (isFixedAllowed) {
+                    m_fixedResumeTimer->stop();
+                    m_fixedPausedByTouch = true;
+                    m_locationIndicatorManager->setFollowingPaused(true);
+                    m_followTimer->stop();
+                }
+                break;
+            case QEvent::MouseButtonRelease:
+                if (isFixedAllowed && m_fixedPausedByTouch) {
+                    m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
+                    m_fixedResumeTimer->start();
+                }
+                break;
+            default:
+                break;
             }
-            break;
-        case QEvent::MouseMove:
-            if (!m_fixedTouchPanEnabled
-                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-                && m_locationIndicatorManager->isLocationVisible()) {
-                event->accept();
-                return true;
-            }
-            break;
-        case QEvent::MouseButtonRelease:
-            if (m_fixedPausedByTouch) {
-                m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
-                m_fixedResumeTimer->start();
-            }
-            break;
-        default:
-            break;
         }
     }
     return QWidget::eventFilter(obj, event);
