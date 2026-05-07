@@ -59,8 +59,9 @@ void GuiTest::initTestCase()
 
     log("initTestCase: creating MainWindow");
     m_window = new MainWindow();
+    m_window->resize(800, 600);
     m_window->show();
-    m_window->resize(1200, 800);
+    QTest::qWait(500);
 
     m_map = m_window->findChild<MapContainer*>();
     QVERIFY(m_map != nullptr);
@@ -333,7 +334,7 @@ void GuiTest::testLocationApi()
     QVERIFY(m_map->isLocationVisible());
 
     m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(400);
+    m_map->setCenterOffset(200);
     QTest::qWait(1000);
     captureScreenshot("12_location_fixed");
     QCOMPARE(m_map->locationMode(), LocationIndicatorManager::LocationMode::Fixed);

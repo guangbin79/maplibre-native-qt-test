@@ -123,7 +123,7 @@ void LocationIndicatorManager::setCenterOffset(int bottomPixels)
 {
     m_centerOffset = bottomPixels;
     if (m_mode == LocationMode::Fixed && m_map) {
-        m_map->setMargins(QMargins(0, 0, 0, m_centerOffset));
+        m_map->setMargins(QMargins(0, m_centerOffset, 0, 0));
         repositionOverlay();
     }
 }
@@ -201,7 +201,7 @@ void LocationIndicatorManager::setOverlayWidget(QWidget* overlay)
 void LocationIndicatorManager::applyFixedMode()
 {
     if (!m_map) return;
-    m_map->setMargins(QMargins(0, 0, 0, m_centerOffset));
+    m_map->setMargins(QMargins(0, m_centerOffset, 0, 0));
     // Fixed 模式下使用 symbol layer 在地图坐标上渲染标注，
     // 通过 margins 偏移地图中心，使标注显示在屏幕特定位置。
     // 这样缩放/旋转/倾斜时标注始终保持在正确的 GPS 坐标上。
@@ -211,8 +211,11 @@ void LocationIndicatorManager::applyFixedMode()
         rebuildSource();
         m_map->setLayoutProperty("location-indicator-layer", "visibility", "visible");
     }
-    if (m_visible && !m_followingPaused)
-        m_map->setCoordinate(QMapLibre::Coordinate(m_lat, m_lon));
+    if (m_visible && !m_followingPaused) {
+        QMapLibre::CameraOptions options;
+        options.center = QVariant::fromValue(QMapLibre::Coordinate(m_lat, m_lon));
+        m_map->jumpTo(options);
+    }
 }
 
 void LocationIndicatorManager::applyFreeMode()

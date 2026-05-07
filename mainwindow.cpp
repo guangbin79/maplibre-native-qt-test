@@ -11,6 +11,7 @@
 #include <QResizeEvent>
 #include <QTimer>
 #include <QStandardPaths>
+#include <QScrollArea>
 
 /**
  * @brief 主窗口构造函数 - UI布局与信号连接初始化
@@ -45,7 +46,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 桌面默认 1200x800，Android 全屏（由系统控制）
     // ============================================================
 #ifndef Q_OS_ANDROID
-    resize(1200, 800);
+    resize(1200, 700);
 #endif
 
     // ============================================================
@@ -106,6 +107,7 @@ MainWindow::MainWindow(QWidget *parent)
     config.styleUrl = serverUrl;
     m_mapContainer = new MapContainer(config, central);
     layout->addWidget(m_mapContainer, 1);
+    m_mapContainer->installEventFilter(this);
 
     // 启用 Fixed 模式下的触摸平移暂停功能：
     // 用户在 Fixed 模式下单指拖动地图时，自动暂停 Fixed 跟随（切换到 Free 显示），
@@ -118,25 +120,37 @@ MainWindow::MainWindow(QWidget *parent)
     m_controlPanel->setFixedWidth(panelWidth);
     layout->addWidget(m_controlPanel, 0);
 
+    // 创建滚动区域容纳所有按钮，防止窗口被强制拉伸
+    auto *scrollArea = new QScrollArea(m_controlPanel);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setStyleSheet(QStringLiteral("QScrollArea { border: none; background: transparent; }"));
+    auto *scrollWidget = new QWidget();
+    auto *scrollLayout = new QVBoxLayout(scrollWidget);
+    scrollLayout->setSpacing(2);
+    scrollLayout->setContentsMargins(2, 2, 2, 2);
+    scrollArea->setWidget(scrollWidget);
+    m_controlPanel->layout()->addWidget(scrollArea);
+
     // 比例尺 - 作为 MapContainer 的子部件，定位在左下角
     m_scaleBar = new ScaleBarWidget(m_mapContainer);
     repositionScaleBar();
 
-    // 标注图层开关 - 在控制面板中添加复选框
+    // 标注图层开关 - 在滚动区域中添加复选框
     m_annotationLayerToggle = new QCheckBox(QStringLiteral("标注"), m_controlPanel);
     m_annotationLayerToggle->setChecked(true);
     m_annotationLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
-    m_controlPanel->layout()->addWidget(m_annotationLayerToggle);
+    scrollLayout->addWidget(m_annotationLayerToggle);
 
     m_routeLayerToggle = new QCheckBox(QStringLiteral("线路"), m_controlPanel);
     m_routeLayerToggle->setChecked(true);
     m_routeLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
-    m_controlPanel->layout()->addWidget(m_routeLayerToggle);
+    scrollLayout->addWidget(m_routeLayerToggle);
 
     m_locationLayerToggle = new QCheckBox(QStringLiteral("位置"), m_controlPanel);
     m_locationLayerToggle->setChecked(false);
     m_locationLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
-    m_controlPanel->layout()->addWidget(m_locationLayerToggle);
+    scrollLayout->addWidget(m_locationLayerToggle);
 
     // ============================================================
     // API 演示按钮区域 - 供开发人员手动测试各接口
@@ -152,7 +166,7 @@ MainWindow::MainWindow(QWidget *parent)
     btnZoomOut->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #2196F3; color: white; font-size: %1px; padding: %2px; }"
     ).arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnZoomOut);
+    scrollLayout->addWidget(btnZoomOut);
     connect(btnZoomOut, &QPushButton::clicked, this, [this]() {
         // 缩小到 Z6，观察国家级别视图
         m_mapContainer->setZoom(6.0);
@@ -160,7 +174,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnZoomIn = new QPushButton(QStringLiteral("放大 (Z12)"), m_controlPanel);
     btnZoomIn->setStyleSheet(QStringLiteral("QPushButton { background-color: #2196F3; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnZoomIn);
+    scrollLayout->addWidget(btnZoomIn);
     connect(btnZoomIn, &QPushButton::clicked, this, [this]() {
         // 放大到 Z12，观察街道级别细节
         m_mapContainer->setZoom(12.0);
@@ -168,7 +182,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnZoomReset = new QPushButton(QStringLiteral("缩放复位"), m_controlPanel);
     btnZoomReset->setStyleSheet(QStringLiteral("QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnZoomReset);
+    scrollLayout->addWidget(btnZoomReset);
     connect(btnZoomReset, &QPushButton::clicked, this, [this]() {
         // 恢复默认缩放级别 Z8
         m_mapContainer->setZoom(8.0);
@@ -179,21 +193,21 @@ MainWindow::MainWindow(QWidget *parent)
     //   bearing: 顺时针旋转角度，单位度。0=正北朝上
     auto *btnRotate45 = new QPushButton(QStringLiteral("旋转 45°"), m_controlPanel);
     btnRotate45->setStyleSheet(QStringLiteral("QPushButton { background-color: #FF9800; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRotate45);
+    scrollLayout->addWidget(btnRotate45);
     connect(btnRotate45, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setBearing(45.0);
     });
 
     auto *btnRotate90 = new QPushButton(QStringLiteral("旋转 90°"), m_controlPanel);
     btnRotate90->setStyleSheet(QStringLiteral("QPushButton { background-color: #FF9800; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRotate90);
+    scrollLayout->addWidget(btnRotate90);
     connect(btnRotate90, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setBearing(90.0);
     });
 
     auto *btnRotateReset = new QPushButton(QStringLiteral("旋转复位"), m_controlPanel);
     btnRotateReset->setStyleSheet(QStringLiteral("QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRotateReset);
+    scrollLayout->addWidget(btnRotateReset);
     connect(btnRotateReset, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setBearing(0.0);
     });
@@ -204,7 +218,7 @@ MainWindow::MainWindow(QWidget *parent)
     //   注意：坐标顺序是 (lat, lon)，与 GeoJSON (lon, lat) 不同
     auto *btnPanShanghai = new QPushButton(QStringLiteral("平移→上海"), m_controlPanel);
     btnPanShanghai->setStyleSheet(QStringLiteral("QPushButton { background-color: #9C27B0; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnPanShanghai);
+    scrollLayout->addWidget(btnPanShanghai);
     connect(btnPanShanghai, &QPushButton::clicked, this, [this]() {
         // 平移到上海 (31.23°N, 121.47°E)
         m_mapContainer->setCenter(31.23, 121.47);
@@ -212,7 +226,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnPanBeijing = new QPushButton(QStringLiteral("平移→北京"), m_controlPanel);
     btnPanBeijing->setStyleSheet(QStringLiteral("QPushButton { background-color: #9C27B0; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnPanBeijing);
+    scrollLayout->addWidget(btnPanBeijing);
     connect(btnPanBeijing, &QPushButton::clicked, this, [this]() {
         // 平移到北京 (39.90°N, 116.41°E)
         m_mapContainer->setCenter(39.90, 116.41);
@@ -220,7 +234,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnPanReset = new QPushButton(QStringLiteral("平移复位"), m_controlPanel);
     btnPanReset->setStyleSheet(QStringLiteral("QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnPanReset);
+    scrollLayout->addWidget(btnPanReset);
     connect(btnPanReset, &QPushButton::clicked, this, [this]() {
         // 恢复初始位置阿尔及尔 (36.75°N, 3.05°E)
         m_mapContainer->setCenter(36.75, 3.05);
@@ -232,21 +246,21 @@ MainWindow::MainWindow(QWidget *parent)
     //   需要样式支持 terrain 才能看到 3D 效果
     auto *btnTilt30 = new QPushButton(QStringLiteral("倾斜 30°"), m_controlPanel);
     btnTilt30->setStyleSheet(QStringLiteral("QPushButton { background-color: #009688; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnTilt30);
+    scrollLayout->addWidget(btnTilt30);
     connect(btnTilt30, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setPitch(30.0);
     });
 
     auto *btnTilt60 = new QPushButton(QStringLiteral("倾斜 60°"), m_controlPanel);
     btnTilt60->setStyleSheet(QStringLiteral("QPushButton { background-color: #009688; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnTilt60);
+    scrollLayout->addWidget(btnTilt60);
     connect(btnTilt60, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setPitch(60.0);
     });
 
     auto *btnTiltReset = new QPushButton(QStringLiteral("倾斜复位"), m_controlPanel);
     btnTiltReset->setStyleSheet(QStringLiteral("QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnTiltReset);
+    scrollLayout->addWidget(btnTiltReset);
     connect(btnTiltReset, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setPitch(0.0);
     });
@@ -257,7 +271,7 @@ MainWindow::MainWindow(QWidget *parent)
     //   icons 参数为图标名称到 QImage 的映射
     auto *btnAnnAdd = new QPushButton(QStringLiteral("添加标注"), m_controlPanel);
     btnAnnAdd->setStyleSheet(QStringLiteral("QPushButton { background-color: #F44336; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnAnnAdd);
+    scrollLayout->addWidget(btnAnnAdd);
     connect(btnAnnAdd, &QPushButton::clicked, this, [this]() {
         QMap<QString, QImage> icons;
         QImage icon(32, 32, QImage::Format_ARGB32);
@@ -279,21 +293,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnAnnHide = new QPushButton(QStringLiteral("隐藏标注"), m_controlPanel);
     btnAnnHide->setStyleSheet(QStringLiteral("QPushButton { background-color: #F44336; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnAnnHide);
+    scrollLayout->addWidget(btnAnnHide);
     connect(btnAnnHide, &QPushButton::clicked, this, [this]() {
         m_mapContainer->hideAllAnnotations();
     });
 
     auto *btnAnnShow = new QPushButton(QStringLiteral("显示标注"), m_controlPanel);
     btnAnnShow->setStyleSheet(QStringLiteral("QPushButton { background-color: #F44336; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnAnnShow);
+    scrollLayout->addWidget(btnAnnShow);
     connect(btnAnnShow, &QPushButton::clicked, this, [this]() {
         m_mapContainer->showAllAnnotations();
     });
 
     auto *btnAnnClear = new QPushButton(QStringLiteral("清除标注"), m_controlPanel);
     btnAnnClear->setStyleSheet(QStringLiteral("QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnAnnClear);
+    scrollLayout->addWidget(btnAnnClear);
     connect(btnAnnClear, &QPushButton::clicked, this, [this]() {
         m_mapContainer->clearAnnotations();
     });
@@ -303,7 +317,7 @@ MainWindow::MainWindow(QWidget *parent)
     //   每条线路包含：id, routeId, coordinates, color, width, dashed
     auto *btnRouteAdd = new QPushButton(QStringLiteral("添加线路"), m_controlPanel);
     btnRouteAdd->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRouteAdd);
+    scrollLayout->addWidget(btnRouteAdd);
     connect(btnRouteAdd, &QPushButton::clicked, this, [this]() {
         QVector<MapRouteSegment> segs;
         MapRouteSegment seg;
@@ -320,21 +334,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnRouteHide = new QPushButton(QStringLiteral("隐藏线路"), m_controlPanel);
     btnRouteHide->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRouteHide);
+    scrollLayout->addWidget(btnRouteHide);
     connect(btnRouteHide, &QPushButton::clicked, this, [this]() {
         m_mapContainer->hideAllRoutes();
     });
 
     auto *btnRouteShow = new QPushButton(QStringLiteral("显示线路"), m_controlPanel);
     btnRouteShow->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRouteShow);
+    scrollLayout->addWidget(btnRouteShow);
     connect(btnRouteShow, &QPushButton::clicked, this, [this]() {
         m_mapContainer->showAllRoutes();
     });
 
     auto *btnRouteClear = new QPushButton(QStringLiteral("清除线路"), m_controlPanel);
     btnRouteClear->setStyleSheet(QStringLiteral("QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnRouteClear);
+    scrollLayout->addWidget(btnRouteClear);
     connect(btnRouteClear, &QPushButton::clicked, this, [this]() {
         m_mapContainer->clearRoutes();
     });
@@ -345,7 +359,7 @@ MainWindow::MainWindow(QWidget *parent)
     // showLocation() / hideLocation() - 显示/隐藏位置指示器
     auto *btnLocShow = new QPushButton(QStringLiteral("显示位置"), m_controlPanel);
     btnLocShow->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnLocShow);
+    scrollLayout->addWidget(btnLocShow);
     connect(btnLocShow, &QPushButton::clicked, this, [this]() {
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
@@ -356,14 +370,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnLocHide = new QPushButton(QStringLiteral("隐藏位置"), m_controlPanel);
     btnLocHide->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnLocHide);
+    scrollLayout->addWidget(btnLocHide);
     connect(btnLocHide, &QPushButton::clicked, this, [this]() {
         m_mapContainer->hideLocation();
     });
 
     auto *btnLocFree = new QPushButton(QStringLiteral("Free模式"), m_controlPanel);
     btnLocFree->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnLocFree);
+    scrollLayout->addWidget(btnLocFree);
     connect(btnLocFree, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Free);
     });
@@ -371,7 +385,7 @@ MainWindow::MainWindow(QWidget *parent)
     // ── Fixed 模式拖动控制演示 ──
     auto *btnFixedBlocked = new QPushButton(QStringLiteral("Fixed+不可拖动"), m_controlPanel);
     btnFixedBlocked->setStyleSheet(QStringLiteral("QPushButton { background-color: #FF5722; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnFixedBlocked);
+    scrollLayout->addWidget(btnFixedBlocked);
     connect(btnFixedBlocked, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
@@ -380,7 +394,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *btnFixedAllowed = new QPushButton(QStringLiteral("Fixed+可拖动"), m_controlPanel);
     btnFixedAllowed->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
-    m_controlPanel->layout()->addWidget(btnFixedAllowed);
+    scrollLayout->addWidget(btnFixedAllowed);
     connect(btnFixedAllowed, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
@@ -394,7 +408,7 @@ MainWindow::MainWindow(QWidget *parent)
     btnResetAll->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #333333; color: white; font-size: %1px; padding: %2px; border: 1px solid #666; }"
     ).arg(btnFontSize).arg(btnPadding + 2));
-    m_controlPanel->layout()->addWidget(btnResetAll);
+    scrollLayout->addWidget(btnResetAll);
     connect(btnResetAll, &QPushButton::clicked, this, [this]() {
         m_mapContainer->setZoom(8.0);
         m_mapContainer->setBearing(0.0);
@@ -413,7 +427,7 @@ MainWindow::MainWindow(QWidget *parent)
         "QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }"
         "QPushButton:disabled { background-color: #666666; }"
     ).arg(btnFontSize + 1).arg(btnPadding + 2));
-    m_controlPanel->layout()->addWidget(testButton);
+    scrollLayout->addWidget(testButton);
 
     m_testLogView = new QTextBrowser(m_controlPanel);
     m_testLogView->setMaximumHeight(logViewMaxHeight);
@@ -421,7 +435,7 @@ MainWindow::MainWindow(QWidget *parent)
         "QTextBrowser { background-color: rgba(0,0,0,180); color: #00FF00; font-size: %1px; }"
     ).arg(logFontSize));
     m_testLogView->setPlaceholderText(QStringLiteral("点击\"运行测试\"开始"));
-    m_controlPanel->layout()->addWidget(m_testLogView);
+    scrollLayout->addWidget(m_testLogView);
 
     // ============================================================
     // TestRunner 自动化测试系统集成
@@ -550,6 +564,14 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
     repositionScaleBar();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_mapContainer && event->type() == QEvent::Resize) {
+        repositionScaleBar();
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 /**
