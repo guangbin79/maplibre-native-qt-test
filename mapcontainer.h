@@ -620,6 +620,29 @@ public:
      */
     QStringList visibleRouteIds() const;
 
+    /**
+     * @brief 聚焦到指定线路
+     *
+     * 计算指定 routeId 对应的所有线路段的边界框，
+     * 自动调整地图中心点和缩放级别，使该线路完整显示在视口中。
+     * 保持当前方位角和倾斜角度不变。
+     *
+     * @param routeId 线路ID（routeId，非段ID）
+     * @param durationMs 动画时长（毫秒），-1 表示使用全局默认值
+     * @return true 成功聚焦，false routeId 不存在或地图未就绪
+     *
+     * @code
+     * // 聚焦到 route-A
+     * mapContainer->focusOnRoute("route-A");
+     *
+     * // 自定义 1 秒动画
+     * mapContainer->focusOnRoute("route-B", 1000);
+     * @endcode
+     *
+     * @see animateTo(), boundingBoxForRoute()
+     */
+    bool focusOnRoute(const QString& routeId, int durationMs = -1);
+
     // ===== 位置指示器接口 =====
 
     /**

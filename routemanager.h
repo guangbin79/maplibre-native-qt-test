@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QVector>
 #include <QStringList>
+#include <QMapLibre/Types>
 #include "maproutesegment.h"
 
 namespace QMapLibre { class Map; }
@@ -30,6 +31,10 @@ public:
 
     QStringList allRouteIds() const;
     QStringList visibleRouteIds() const;
+
+    bool boundingBoxForRoute(const QString& routeId,
+                             QMapLibre::Coordinate& sw,
+                             QMapLibre::Coordinate& ne) const;
 
 private:
     void ensureLayerSetup();

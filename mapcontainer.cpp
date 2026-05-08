@@ -731,6 +731,23 @@ QStringList MapContainer::visibleRouteIds() const {
     return m_routeManager->visibleRouteIds();
 }
 
+bool MapContainer::focusOnRoute(const QString& routeId, int durationMs) {
+    if (!m_mapReady) return false;
+
+    QMapLibre::Coordinate sw, ne;
+    if (!m_routeManager->boundingBoxForRoute(routeId, sw, ne))
+        return false;
+
+    auto coordZoom = map()->coordinateZoomForBounds(sw, ne);
+    double centerLat = coordZoom.first.first;
+    double centerLon = coordZoom.first.second;
+    double zoom = coordZoom.second;
+
+    animateTo(centerLat, centerLon, zoom,
+              map()->bearing(), map()->pitch(), durationMs);
+    return true;
+}
+
 // ===== 位置指示器委托方法 =====
 
 void MapContainer::setLocation(double lat, double lon) {

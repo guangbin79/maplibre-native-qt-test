@@ -353,6 +353,33 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->clearRoutes();
     });
 
+    // focusOnRoute(routeId, durationMs) - 聚焦到指定线路
+    //   routeId: 线路ID（对应 MapRouteSegment::routeId）
+    //   durationMs: 动画时长（毫秒），-1 使用默认值
+    //   返回: true 成功聚焦，false 线路不存在或地图未就绪
+    auto *btnRouteFocus = new QPushButton(QStringLiteral("聚焦线路"), m_controlPanel);
+    btnRouteFocus->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnRouteFocus);
+    connect(btnRouteFocus, &QPushButton::clicked, this, [this]() {
+        // 先确保有线路数据
+        QVector<MapRouteSegment> segs;
+        MapRouteSegment seg;
+        seg.id = "focus-test-1";
+        seg.routeId = "route-A";
+        seg.coordinates = {{36.75, 3.05}, {36.76, 3.06}, {36.77, 3.07}};
+        seg.color = QColor(255, 0, 0);
+        seg.width = 3.0;
+        seg.dashed = false;
+        segs.append(seg);
+
+        m_mapContainer->setRoutes(segs);
+        // 聚焦到 route-A，地图自动缩放平移到包含该线路的区域
+        bool ok = m_mapContainer->focusOnRoute("route-A");
+        if (!ok) {
+            qDebug() << "focusOnRoute failed: route not found or map not ready";
+        }
+    });
+
     // ── 位置 API 演示 ──
     // setLocation(double lat, double lon) - 设置位置指示器坐标
     // setLocationMode(LocationMode) - 设置模式：Fixed/Free

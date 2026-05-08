@@ -20,6 +20,41 @@ QStringList RouteManager::visibleRouteIds() const {
     return m_visibleRouteIds;
 }
 
+bool RouteManager::boundingBoxForRoute(const QString& routeId,
+                                       QMapLibre::Coordinate& sw,
+                                       QMapLibre::Coordinate& ne) const {
+    double minLat = 90.0, maxLat = -90.0;
+    double minLon = 180.0, maxLon = -180.0;
+    bool found = false;
+
+    for (const auto& seg : m_segments) {
+        if (seg.routeId != routeId) continue;
+        found = true;
+        for (const auto& coord : seg.coordinates) {
+            minLat = qMin(minLat, coord.first);
+            maxLat = qMax(maxLat, coord.first);
+            minLon = qMin(minLon, coord.second);
+            maxLon = qMax(maxLon, coord.second);
+        }
+    }
+
+    if (!found) return false;
+
+    // 强制最小跨度，防止退化边界框导致极端缩放
+    double latSpan = qMax(maxLat - minLat, 0.001);
+    double lonSpan = qMax(maxLon - minLon, 0.001);
+
+    // 10% padding + 最小 0.005° 下限
+    double latPad = qMax(latSpan * 0.1, 0.005);
+    double lonPad = qMax(lonSpan * 0.1, 0.005);
+
+    sw = QMapLibre::Coordinate(qMax(-90.0, minLat - latPad),
+                               qMax(-180.0, minLon - lonPad));
+    ne = QMapLibre::Coordinate(qMin(90.0, maxLat + latPad),
+                               qMin(180.0, maxLon + lonPad));
+    return true;
+}
+
 void RouteManager::setSegments(const QVector<MapRouteSegment>& segments) {
     if (!m_ready) return;
     clearSegments();
