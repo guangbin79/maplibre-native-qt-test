@@ -118,22 +118,13 @@ void requestManageExternalStoragePermission()
 /**
  * @brief 获取外部存储上的 GIS 数据根目录
  *
- * 优先检查 /sdcard/map_data，其次 /storage/emulated/0/map_data。
- * 若目录已存在则直接返回；否则返回 /sdcard/map_data（用户需自行放置数据）。
+ * 优先检查 /storage/emulated/0/TitanNavi/map_data，
+ * 若目录已存在则直接返回；否则返回该路径（用户需自行放置数据）。
  */
 QString getExternalStorageRootPath()
 {
-    QStringList candidates = {
-        QStringLiteral("/sdcard/map_data"),
-        QStringLiteral("/storage/emulated/0/map_data")
-    };
-
-    for (const QString &path : candidates) {
-        if (QDir(path).exists())
-            return path;
-    }
-
-    return QStringLiteral("/sdcard/map_data");
+    QString path = QStringLiteral("/storage/emulated/0/TitanNavi/map_data");
+    return path;
 }
 #endif
 
@@ -214,8 +205,7 @@ int main(int argc, char *argv[])
         QMessageBox dataBox;
         dataBox.setWindowTitle(QStringLiteral("缺少地图数据"));
         dataBox.setText(QStringLiteral("未找到地图数据目录：%1\n\n"
-                                       "请在手机存储根目录创建 map_data 文件夹，"
-                                       "并将地图数据拷贝到该目录后点击\"已完成\"。")
+                                       "请将地图数据拷贝到该目录后点击\"已完成\"。")
                             .arg(rootPath));
         QPushButton *doneBtn = dataBox.addButton(QStringLiteral("已完成"), QMessageBox::AcceptRole);
         QPushButton *exitBtn = dataBox.addButton(QStringLiteral("退出"), QMessageBox::RejectRole);

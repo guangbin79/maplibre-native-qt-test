@@ -12,13 +12,12 @@
 #include <QTimer>
 #include <QStandardPaths>
 #include <QScrollArea>
+#include <QScroller>
 #include <QCoreApplication>
 #include <ttsplayer/TTSPlayer.h>
 #ifdef IS_ANDROID
     #include <QJniObject>
-    #include <QNativeInterface>
-    #include <android/asset_manager.h>
-    #include <android/asset_manager_jni.h>
+    #include <QtCore/qcoreapplication_platform.h>
 #endif
 
 /**
@@ -63,12 +62,11 @@ MainWindow::MainWindow(QWidget *parent)
     // 跨平台：配置参数
     // ============================================================
 #ifdef Q_OS_ANDROID
-    // Android：HXGISServer 运行在远程主机，需改为实际 IP
-    // 调试时可使用 adb reverse tcp:4943 tcp:4943 将桌面端口转发到设备
-    const QString serverHost = QStringLiteral("192.168.1.100");
+    // Android：HXGISServer 在本地启动，使用 loopback 地址
+    const QString serverHost = QStringLiteral("127.0.0.1");
     const QString serverUrl = QStringLiteral("http://%1:4943/styles/day/style.json?schema=hxmap").arg(serverHost);
 
-    // Android：数据目录为应用私有目录 /sdcard/Android/data/<pkg>/files/map_data
+    // Android：数据目录为外部存储 /storage/emulated/0/TitanNavi/map_data
     // 首次运行需将 map_data 复制到该目录（可通过 Qt 的 assets 或手动 push）
     const QString dataRootPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/map_data");
 #else
@@ -135,6 +133,8 @@ MainWindow::MainWindow(QWidget *parent)
     scrollArea->setWidgetResizable(true);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setStyleSheet(QStringLiteral("QScrollArea { border: none; background: transparent; }"));
+    scrollArea->viewport()->setAttribute(Qt::WA_AcceptTouchEvents);
+    QScroller::grabGesture(scrollArea->viewport(), QScroller::LeftMouseButtonGesture);
     auto *scrollWidget = new QWidget();
     auto *scrollLayout = new QVBoxLayout(scrollWidget);
     scrollLayout->setSpacing(2);
@@ -506,16 +506,9 @@ MainWindow::MainWindow(QWidget *parent)
     {
         QString ttsModelPath;
 #ifdef IS_ANDROID
-        // Android: 使用 initializeWithResources() 直接从 APK assets 读取模型
-        ttsModelPath = QStringLiteral("models/fr_FR-siwis-low");
-        // 获取 AAssetManager 指针
-        auto context = QNativeInterface::QAndroidApplication::context();
-        QJniObject assetManager = context.callObjectMethod("getAssets", "()Landroid/content/res/AssetManager;");
-        AAssetManager *assetMgr = AAssetManager_fromJava(assetManager.object());
-        if (assetMgr) {
-            m_ttsPlayer->initializeWithResources(ttsModelPath, assetMgr);
-        } else {
-            qWarning() << "Failed to get AAssetManager";
+        ttsModelPath = QStringLiteral("/storage/emulated/0/TitanNavi/tts_models/fr_FR-siwis-low");
+        if (!m_ttsPlayer->initialize(ttsModelPath)) {
+            qWarning() << "TTSPlayer initialization failed for path:" << ttsModelPath;
             m_ttsButton->setText(QStringLiteral("TTS 初始化失败"));
         }
 #else

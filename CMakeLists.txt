@@ -122,7 +122,7 @@ endif()
 
 # QMapLibre Widgets 组件（内部依赖 Core + Qt6::OpenGLWidgets + Qt6::Widgets）
 find_package(QMapLibre REQUIRED COMPONENTS Core Widgets)
-find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets Network Multimedia)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -250,7 +250,12 @@ target_link_libraries(appuntitled PRIVATE
     Qt6::Widgets
     Qt6::OpenGLWidgets
     Qt6::Network
+    Qt6::Multimedia
 )
+
+if(ANDROID)
+    target_link_libraries(appuntitled PRIVATE android)
+endif()
 
 # =============================================================================
 # Android 部署配置
@@ -276,24 +281,16 @@ target_link_libraries(appuntitled PRIVATE
 #   - MACOSX_BUNDLE TRUE：生成 macOS .app 应用包
 #   - WIN32_EXECUTABLE TRUE：Windows GUI 子系统（无控制台窗口）
 #
-    # 部署 TTS 模型到 Android assets 目录（仅 Android 构建需要）
-    if(ANDROID)
-        set(TTS_MODEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/ttsplayer-1.0.0/models/fr_FR-siwis-low")
-        set(TTS_MODEL_DST "${CMAKE_CURRENT_SOURCE_DIR}/android/assets/models/fr_FR-siwis-low")
-        if(NOT EXISTS "${TTS_MODEL_DST}")
-            file(COPY "${TTS_MODEL_SRC}" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/android/assets/models")
-            message(STATUS "TTS model copied to android/assets/models/fr_FR-siwis-low")
-        endif()
-    endif()
-
 if(ANDROID)
+    set(ANDROID_EXTRA_LIBS
+        "${HXGISSERVER_DIR}/libplugin-HXGISServer.so"
+        "${TTSPLAYER_LIB_DIR}/libttsplayer.so"
+        "${TTSPLAYER_LIB_DIR}/libonnxruntime.so"
+        "${TTSPLAYER_LIB_DIR}/libsherpa-onnx-c-api.so"
+    )
     set_target_properties(appuntitled PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
-        QT_ANDROID_EXTRA_LIBS
-            "${HXGISSERVER_DIR}/libplugin-HXGISServer.so"
-            "${TTSPLAYER_LIB_DIR}/libttsplayer.so"
-            "${TTSPLAYER_LIB_DIR}/libonnxruntime.so"
-            "${TTSPLAYER_LIB_DIR}/libsherpa-onnx-c-api.so"
+        QT_ANDROID_EXTRA_LIBS "${ANDROID_EXTRA_LIBS}"
     )
 else()
     set_target_properties(appuntitled PROPERTIES
