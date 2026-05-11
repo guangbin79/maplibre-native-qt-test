@@ -82,12 +82,16 @@ if(ANDROID)
     set(MAPLIBRE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Android/${ANDROID_ABI}")
     set(HXGISSERVER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib-plugin-HXGISServer/plugin-HXGISServer-android/${ANDROID_ABI}")
     set(HXGISSERVER_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib-plugin-HXGISServer/plugin-HXGISServer-android")
+    set(TTSPLAYER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ttsplayer-1.0.0/android_arm64/lib")
 else()
     # Linux SDK 直接在根目录下（x86_64 是唯一的架构支持）
     set(MAPLIBRE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Linux")
     set(HXGISSERVER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib-plugin-HXGISServer/plugin-HXGISServer-linux/x86_64")
     set(HXGISSERVER_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib-plugin-HXGISServer/plugin-HXGISServer-linux")
+    set(TTSPLAYER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ttsplayer-1.0.0/linux_x86_64/lib")
 endif()
+
+set(TTSPLAYER_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ttsplayer-1.0.0/include")
 
 # =============================================================================
 # 依赖查找配置
@@ -182,6 +186,13 @@ target_link_directories(appuntitled PRIVATE ${HXGISSERVER_DIR})
 target_link_libraries(appuntitled PRIVATE plugin-HXGISServer)
 
 # =============================================================================
+# ttsplayer 库配置
+# =============================================================================
+target_include_directories(appuntitled PRIVATE ${TTSPLAYER_INCLUDE_DIR})
+target_link_directories(appuntitled PRIVATE ${TTSPLAYER_LIB_DIR})
+target_link_libraries(appuntitled PRIVATE ttsplayer sherpa-onnx-c-api onnxruntime)
+
+# =============================================================================
 # 平台特定编译定义
 # =============================================================================
 #
@@ -210,7 +221,7 @@ else()
     #   BUILD_RPATH 指定构建时和运行时的动态库搜索路径
     #   这里设置为 HXGISServer 库所在目录，确保可执行文件能找到 libplugin-HXGISServer.so
     #   如果不设置，运行时会报 "error while loading shared libraries" 错误
-    set_target_properties(appuntitled PROPERTIES BUILD_RPATH "${HXGISSERVER_DIR}")
+    set_target_properties(appuntitled PROPERTIES BUILD_RPATH "${HXGISSERVER_DIR};${TTSPLAYER_LIB_DIR}")
 endif()
 
 # =============================================================================
@@ -266,9 +277,18 @@ target_link_libraries(appuntitled PRIVATE
 #   - WIN32_EXECUTABLE TRUE：Windows GUI 子系统（无控制台窗口）
 #
 if(ANDROID)
+    # Deploy TTS models to Android assets
+    set(TTS_MODEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/ttsplayer-1.0.0/models/fr_FR-siwis-low")
+    set(TTS_MODEL_DST "${CMAKE_CURRENT_SOURCE_DIR}/android/assets/models/fr_FR-siwis-low")
+    file(CREATE_LINK "${TTS_MODEL_SRC}" "${TTS_MODEL_DST}" SYMBOLIC COPY_ON_ERROR)
+
     set_target_properties(appuntitled PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
-        QT_ANDROID_EXTRA_LIBS "${HXGISSERVER_DIR}/libplugin-HXGISServer.so"
+        QT_ANDROID_EXTRA_LIBS
+            "${HXGISSERVER_DIR}/libplugin-HXGISServer.so"
+            "${TTSPLAYER_LIB_DIR}/libttsplayer.so"
+            "${TTSPLAYER_LIB_DIR}/libonnxruntime.so"
+            "${TTSPLAYER_LIB_DIR}/libsherpa-onnx-c-api.so"
     )
 else()
     set_target_properties(appuntitled PROPERTIES

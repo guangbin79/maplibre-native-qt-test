@@ -32,6 +32,9 @@ QT_DIR="${QT_DIR:-$HOME/Qt/6.6.3/gcc_64}"
 # MapLibre Native Qt SDK 路径（Linux 版本）
 MAPLIBRE_DIR="${PROJECT_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Linux"
 
+# ttsplayer 库路径（Linux 版本）
+TTSPLAYER_DIR="${PROJECT_DIR}/ttsplayer-1.0.0/linux_x86_64/lib"
+
 echo "=== Linux x86_64 Build ==="
 echo "Qt:     ${QT_DIR}"
 echo "Type:   ${BUILD_TYPE}"
@@ -54,13 +57,14 @@ cmake --build "${BUILD_DIR}" -j"${JOBS}"
 cat > "${BUILD_DIR}/run.sh" <<'RUNEOF'
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export LD_LIBRARY_PATH="__QT_LIB__/lib:__MAPLIBRE_LIB__/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="__QT_LIB__/lib:__MAPLIBRE_LIB__/lib64:__TTS_LIB__${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$SCRIPT_DIR/appuntitled" "$@"
 RUNEOF
 
 # 替换模板变量为实际路径
 sed -i "s|__QT_LIB__|${QT_DIR}|g" "${BUILD_DIR}/run.sh"
 sed -i "s|__MAPLIBRE_LIB__|${MAPLIBRE_DIR}|g" "${BUILD_DIR}/run.sh"
+sed -i "s|__TTS_LIB__|${TTSPLAYER_DIR}|g" "${BUILD_DIR}/run.sh"
 chmod +x "${BUILD_DIR}/run.sh"
 
 echo ""
