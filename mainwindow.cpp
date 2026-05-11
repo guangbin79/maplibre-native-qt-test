@@ -520,7 +520,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
 #else
         // Linux: 直接使用项目目录下的模型
-        ttsModelPath = QStringLiteral("%1/../ttsplayer-1.0.0/models/fr_FR-siwis-low")
+        ttsModelPath = QStringLiteral("%1/../../ttsplayer-1.0.0/models/fr_FR-siwis-low")
             .arg(QCoreApplication::applicationDirPath());
         if (!m_ttsPlayer->initialize(ttsModelPath)) {
             qWarning() << "TTSPlayer initialization failed for path:" << ttsModelPath;
