@@ -9,3 +9,9 @@ ttsplayer-1.0.0/**/cmn_dict filter=lfs diff=lfs merge=lfs -text
 ttsplayer-1.0.0/**/ru_dict filter=lfs diff=lfs merge=lfs -text
 ttsplayer-1.0.0/**/yue_dict filter=lfs diff=lfs merge=lfs -text
 ttsplayer-1.0.0/**/lb_dict filter=lfs diff=lfs merge=lfs -text
+android/assets/models/**/phondata filter=lfs diff=lfs merge=lfs -text
+android/assets/models/**/phonindex filter=lfs diff=lfs merge=lfs -text
+android/assets/models/**/cmn_dict filter=lfs diff=lfs merge=lfs -text
+android/assets/models/**/ru_dict filter=lfs diff=lfs merge=lfs -text
+android/assets/models/**/yue_dict filter=lfs diff=lfs merge=lfs -text
+android/assets/models/**/lb_dict filter=lfs diff=lfs merge=lfs -text
