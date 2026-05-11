@@ -6,6 +6,8 @@ class MapContainer;
 class ScaleBarWidget;
 class ControlPanelWidget;
 class TestRunner;
+class TTSPlayer;
+class QPushButton;
 class QTextBrowser;
 
 /**
@@ -75,4 +77,6 @@ private:
 
     TestRunner *m_testRunner;
     QTextBrowser *m_testLogView;
+    TTSPlayer *m_ttsPlayer;
+    QPushButton *m_ttsButton;
 };

@@ -12,6 +12,14 @@
 #include <QTimer>
 #include <QStandardPaths>
 #include <QScrollArea>
+#include <QCoreApplication>
+#include <ttsplayer/TTSPlayer.h>
+#ifdef IS_ANDROID
+    #include <QJniObject>
+    #include <QNativeInterface>
+    #include <android/asset_manager.h>
+    #include <android/asset_manager_jni.h>
+#endif
 
 /**
  * @brief 主窗口构造函数 - UI布局与信号连接初始化
@@ -38,6 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     , m_locationLayerToggle(nullptr)
     , m_testRunner(nullptr)
     , m_testLogView(nullptr)
+    , m_ttsPlayer(nullptr)
+    , m_ttsButton(nullptr)
 {
     setWindowTitle(QStringLiteral("Map Viewer"));
 
@@ -445,6 +455,79 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->clearRoutes();
         m_mapContainer->hideLocation();
     });
+
+    // ============================================================
+    // TTS 法语播放按钮
+    // ============================================================
+    m_ttsButton = new QPushButton(QStringLiteral("TTS 加载中..."), m_controlPanel);
+    m_ttsButton->setEnabled(false);
+    m_ttsButton->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #E91E63; color: white; font-size: %1px; padding: %2px; }"
+        "QPushButton:disabled { background-color: #666666; }"
+    ).arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(m_ttsButton);
+
+    m_ttsPlayer = new TTSPlayer(this);
+
+    // 连接 TTSPlayer 信号
+    connect(m_ttsPlayer, &TTSPlayer::readyChanged, this, [this](bool ready) {
+        if (ready) {
+            m_ttsButton->setEnabled(true);
+            m_ttsButton->setText(QStringLiteral("播放法语"));
+            qDebug() << "TTSPlayer initialized successfully";
+        } else {
+            m_ttsButton->setEnabled(false);
+            m_ttsButton->setText(QStringLiteral("TTS 未就绪"));
+        }
+    });
+
+    connect(m_ttsPlayer, &TTSPlayer::playingChanged, this, [this](bool playing) {
+        if (playing) {
+            m_ttsButton->setEnabled(false);
+            m_ttsButton->setText(QStringLiteral("播放中..."));
+        } else {
+            m_ttsButton->setEnabled(true);
+            m_ttsButton->setText(QStringLiteral("播放法语"));
+        }
+    });
+
+    connect(m_ttsPlayer, &TTSPlayer::errorOccurred, this, [this](const QString &errorMsg) {
+        qWarning() << "TTSPlayer error:" << errorMsg;
+        m_ttsButton->setEnabled(false);
+        m_ttsButton->setText(QStringLiteral("TTS 错误"));
+    });
+
+    // 点击播放法语文本
+    connect(m_ttsButton, &QPushButton::clicked, this, [this]() {
+        m_ttsPlayer->play(QStringLiteral("Bonjour, ceci est un test de synthèse vocale française."));
+    });
+
+    // 初始化 TTSPlayer - 平台特定的模型路径
+    {
+        QString ttsModelPath;
+#ifdef IS_ANDROID
+        // Android: 使用 initializeWithResources() 直接从 APK assets 读取模型
+        ttsModelPath = QStringLiteral("models/fr_FR-siwis-low");
+        // 获取 AAssetManager 指针
+        auto context = QNativeInterface::QAndroidApplication::context();
+        QJniObject assetManager = context.callObjectMethod("getAssets", "()Landroid/content/res/AssetManager;");
+        AAssetManager *assetMgr = AAssetManager_fromJava(assetManager.object());
+        if (assetMgr) {
+            m_ttsPlayer->initializeWithResources(ttsModelPath, assetMgr);
+        } else {
+            qWarning() << "Failed to get AAssetManager";
+            m_ttsButton->setText(QStringLiteral("TTS 初始化失败"));
+        }
+#else
+        // Linux: 直接使用项目目录下的模型
+        ttsModelPath = QStringLiteral("%1/../ttsplayer-1.0.0/models/fr_FR-siwis-low")
+            .arg(QCoreApplication::applicationDirPath());
+        if (!m_ttsPlayer->initialize(ttsModelPath)) {
+            qWarning() << "TTSPlayer initialization failed for path:" << ttsModelPath;
+            m_ttsButton->setText(QStringLiteral("TTS 初始化失败"));
+        }
+#endif
+    }
 
     // ============================================================
     // TestRunner 自动化测试系统集成
