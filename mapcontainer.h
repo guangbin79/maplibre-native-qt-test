@@ -33,6 +33,8 @@
 #include "annotationmanager.h"
 #include "maproutesegment.h"
 #include "routemanager.h"
+#include "mappolygon.h"
+#include "polygonmanager.h"
 #include "locationindicatormanager.h"
 #include "cameraanimationmath.h"
 #include <QLabel>
@@ -643,6 +645,24 @@ public:
      */
     bool focusOnRoute(const QString& routeId, int durationMs = -1);
 
+    // ===== 多边形管理接口 =====
+
+    /**
+     * @brief 批量设置多边形（替换全部）
+     */
+    void setPolygons(const QVector<MapPolygon>& polygons);
+    void clearPolygons();
+    void addPolygon(const MapPolygon& polygon);
+    void addPolygons(const QVector<MapPolygon>& polygons);
+    void removePolygon(const QString& id);
+    void removePolygons(const QStringList& ids);
+    void setVisiblePolygonIds(const QStringList& polygonIds);
+    void showAllPolygons();
+    void hideAllPolygons();
+    QStringList allPolygonIds() const;
+    QStringList visiblePolygonIds() const;
+    bool focusOnPolygon(const QString& polygonId, int durationMs = -1);
+
     // ===== 位置指示器接口 =====
 
     /**
@@ -1080,6 +1100,7 @@ private:
 
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;
+    PolygonManager* m_polygonManager = nullptr;
     LocationIndicatorManager* m_locationIndicatorManager = nullptr;
     QLabel* m_locationOverlay = nullptr;
     bool m_mapReady = false;

@@ -748,6 +748,69 @@ bool MapContainer::focusOnRoute(const QString& routeId, int durationMs) {
     return true;
 }
 
+// ===== 多边形管理委托方法 =====
+
+void MapContainer::setPolygons(const QVector<MapPolygon>& polygons) {
+    m_polygonManager->setPolygons(polygons);
+}
+
+void MapContainer::clearPolygons() {
+    m_polygonManager->clearPolygons();
+}
+
+void MapContainer::addPolygon(const MapPolygon& polygon) {
+    m_polygonManager->addPolygon(polygon);
+}
+
+void MapContainer::addPolygons(const QVector<MapPolygon>& polygons) {
+    m_polygonManager->addPolygons(polygons);
+}
+
+void MapContainer::removePolygon(const QString& id) {
+    m_polygonManager->removePolygon(id);
+}
+
+void MapContainer::removePolygons(const QStringList& ids) {
+    m_polygonManager->removePolygons(ids);
+}
+
+void MapContainer::setVisiblePolygonIds(const QStringList& polygonIds) {
+    m_polygonManager->setVisiblePolygonIds(polygonIds);
+}
+
+void MapContainer::showAllPolygons() {
+    m_polygonManager->showAllPolygons();
+}
+
+void MapContainer::hideAllPolygons() {
+    m_polygonManager->hideAllPolygons();
+}
+
+QStringList MapContainer::allPolygonIds() const {
+    return m_polygonManager->allPolygonIds();
+}
+
+QStringList MapContainer::visiblePolygonIds() const {
+    return m_polygonManager->visiblePolygonIds();
+}
+
+bool MapContainer::focusOnPolygon(const QString& polygonId, int durationMs) {
+    if (!m_mapReady) return false;
+
+    QMapLibre::Coordinate sw, ne;
+    if (!m_polygonManager->boundingBoxForPolygon(polygonId, sw, ne))
+        return false;
+
+    auto coordZoom = map()->coordinateZoomForBounds(sw, ne);
+    double centerLat = coordZoom.first.first;
+    double centerLon = coordZoom.first.second;
+    double zoom = coordZoom.second;
+
+    animateTo(centerLat, centerLon, zoom,
+              map()->bearing(), map()->pitch(), durationMs);
+    return true;
+}
+
 // ===== 位置指示器委托方法 =====
 
 void MapContainer::setLocation(double lat, double lon) {
@@ -908,6 +971,7 @@ void MapContainer::connectMapSignals()
         if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
             m_annotationManager->setMapReady(true);
             m_routeManager->setMapReady(true);
+            m_polygonManager->setMapReady(true);
             m_locationIndicatorManager->setMapReady(true);
             m_mapReady = true;
             emit mapReady();
@@ -955,6 +1019,7 @@ void MapContainer::connectMapSignals()
 
     m_annotationManager = new AnnotationManager(m, this);
     m_routeManager = new RouteManager(m, this);
+    m_polygonManager = new PolygonManager(m, this);
     m_locationIndicatorManager = new LocationIndicatorManager(m, this);
 
     m_locationOverlay = new QLabel(this);

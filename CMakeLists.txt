@@ -158,6 +158,11 @@ qt_add_executable(appuntitled
     routegeojsonbuilder.cpp
     routemanager.h
     routemanager.cpp
+    mappolygon.h
+    polygongeojsonbuilder.h
+    polygongeojsonbuilder.cpp
+    polygonmanager.h
+    polygonmanager.cpp
     locationindicatormanager.h
     locationindicatormanager.cpp
     testrunner.h
