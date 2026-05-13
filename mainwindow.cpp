@@ -42,6 +42,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_controlPanel(nullptr)
     , m_annotationLayerToggle(nullptr)
     , m_routeLayerToggle(nullptr)
+    , m_polygonLayerToggle(nullptr)
     , m_locationLayerToggle(nullptr)
     , m_testRunner(nullptr)
     , m_testLogView(nullptr)
@@ -156,6 +157,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_routeLayerToggle->setChecked(true);
     m_routeLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
     scrollLayout->addWidget(m_routeLayerToggle);
+
+    m_polygonLayerToggle = new QCheckBox(QStringLiteral("多边形"), m_controlPanel);
+    m_polygonLayerToggle->setChecked(true);
+    m_polygonLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
+    scrollLayout->addWidget(m_polygonLayerToggle);
 
     m_locationLayerToggle = new QCheckBox(QStringLiteral("位置"), m_controlPanel);
     m_locationLayerToggle->setChecked(false);
@@ -390,6 +396,81 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
+    // ── 多边形 API 演示 ──
+    // setPolygons(QVector<MapPolygon>) - 批量添加多边形
+    //   每个多边形包含：id, polygonId, coordinates, fillEnabled, fillColor,
+    //                  fillOpacity, strokeColor, strokeWidth, strokeDashed, title
+    auto *btnPolygonAdd = new QPushButton(QStringLiteral("添加多边形"), m_controlPanel);
+    btnPolygonAdd->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }"
+    ).arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnPolygonAdd);
+    connect(btnPolygonAdd, &QPushButton::clicked, this, [this]() {
+        QVector<MapPolygon> polys;
+
+        // 红色半透明填充实线矩形
+        MapPolygon poly1;
+        poly1.id = "demo-poly-1";
+        poly1.polygonId = "polygon-demo-A";
+        poly1.coordinates = {{36.74, 3.04}, {36.76, 3.04}, {36.76, 3.06}, {36.74, 3.06}};
+        poly1.fillEnabled = true;
+        poly1.fillColor = QColor(255, 0, 0);
+        poly1.fillOpacity = 0.3;
+        poly1.strokeColor = QColor(255, 0, 0);
+        poly1.strokeWidth = 2.0;
+        poly1.strokeDashed = false;
+        poly1.title = "红色区域";
+        polys.append(poly1);
+
+        // 蓝色虚线边框三角形
+        MapPolygon poly2;
+        poly2.id = "demo-poly-2";
+        poly2.polygonId = "polygon-demo-B";
+        poly2.coordinates = {{36.77, 3.05}, {36.79, 3.07}, {36.78, 3.03}};
+        poly2.fillEnabled = true;
+        poly2.fillColor = QColor(0, 0, 255);
+        poly2.fillOpacity = 0.2;
+        poly2.strokeColor = QColor(0, 0, 255);
+        poly2.strokeWidth = 2.0;
+        poly2.strokeDashed = true;
+        poly2.title = "蓝色三角";
+        polys.append(poly2);
+
+        m_mapContainer->setPolygons(polys);
+    });
+
+    auto *btnPolygonFocus = new QPushButton(QStringLiteral("聚焦多边形"), m_controlPanel);
+    btnPolygonFocus->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }"
+    ).arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnPolygonFocus);
+    connect(btnPolygonFocus, &QPushButton::clicked, this, [this]() {
+        QVector<MapPolygon> polys;
+        MapPolygon poly;
+        poly.id = "focus-test-poly";
+        poly.polygonId = "polygon-demo-A";
+        poly.coordinates = {{36.74, 3.04}, {36.76, 3.04}, {36.76, 3.06}, {36.74, 3.06}};
+        poly.fillEnabled = true;
+        poly.fillColor = QColor(255, 0, 0);
+        poly.fillOpacity = 0.3;
+        poly.strokeColor = QColor(255, 0, 0);
+        poly.strokeWidth = 2.0;
+        m_mapContainer->setPolygons({poly});
+        bool ok = m_mapContainer->focusOnPolygon("polygon-demo-A");
+        if (!ok) {
+            qDebug() << "focusOnPolygon failed";
+        }
+    });
+
+    auto *btnPolygonClear = new QPushButton(QStringLiteral("清除多边形"), m_controlPanel);
+    btnPolygonClear->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #757575; color: white; font-size: %1px; padding: %2px; }"
+    ).arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnPolygonClear);
+    connect(btnPolygonClear, &QPushButton::clicked, this, [this]() {
+        m_mapContainer->clearPolygons();
+    });
+
     // ── 位置 API 演示 ──
     // setLocation(double lat, double lon) - 设置位置指示器坐标
     // setLocationMode(LocationMode) - 设置模式：Fixed/Free
@@ -453,6 +534,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setCenter(36.75, 3.05);
         m_mapContainer->clearAnnotations();
         m_mapContainer->clearRoutes();
+        m_mapContainer->clearPolygons();
         m_mapContainer->hideLocation();
     });
 
@@ -647,6 +729,15 @@ MainWindow::MainWindow(QWidget *parent)
             m_mapContainer->showAllRoutes();
         else
             m_mapContainer->hideAllRoutes();
+    });
+
+    // 8. 多边形图层开关
+    connect(m_polygonLayerToggle, &QCheckBox::toggled,
+            this, [this](bool checked) {
+        if (checked)
+            m_mapContainer->showAllPolygons();
+        else
+            m_mapContainer->hideAllPolygons();
     });
 
     // 7. 位置图层开关

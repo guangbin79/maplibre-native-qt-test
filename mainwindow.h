@@ -73,6 +73,7 @@ private:
     ControlPanelWidget *m_controlPanel;
     QCheckBox *m_annotationLayerToggle;
     QCheckBox *m_routeLayerToggle;
+    QCheckBox *m_polygonLayerToggle;
     QCheckBox *m_locationLayerToggle;
 
     TestRunner *m_testRunner;
