@@ -14,6 +14,11 @@
 #include <QScrollArea>
 #include <QScroller>
 #include <QCoreApplication>
+#include <QFileDialog>
+#include <QFile>
+#include <QDir>
+#include "geojsonexporter.h"
+#include "geojsonimporter.h"
 #include <ttsplayer/TTSPlayer.h>
 #ifdef IS_ANDROID
     #include <QJniObject>
@@ -282,29 +287,59 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     // ── 标注 API 演示 ──
-    // setAnnotations(QVector<MapAnnotation>, QMap<QString, QImage>) - 批量添加标注
+    // 标注 API 分两步调用：
+    //   1. registerAnnotationIcons(QMap<QString, QImage>) - 先注册图标
+    //   2. setAnnotations(QVector<MapAnnotation>) - 再添加标注数据
     //   每个标注包含：id, latitude, longitude, title, iconName
-    //   icons 参数为图标名称到 QImage 的映射
     auto *btnAnnAdd = new QPushButton(QStringLiteral("添加标注"), m_controlPanel);
     btnAnnAdd->setStyleSheet(QStringLiteral("QPushButton { background-color: #F44336; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnAnnAdd);
     connect(btnAnnAdd, &QPushButton::clicked, this, [this]() {
+        // 注册两种不同颜色的图标
         QMap<QString, QImage> icons;
-        QImage icon(32, 32, QImage::Format_ARGB32);
-        icon.fill(Qt::red);
-        icons["marker"] = icon;
+        QImage markerIcon(32, 32, QImage::Format_ARGB32);
+        markerIcon.fill(Qt::red);
+        icons["marker"] = markerIcon;
+
+        QImage flagIcon(32, 32, QImage::Format_ARGB32);
+        flagIcon.fill(Qt::blue);
+        icons["flag"] = flagIcon;
 
         QVector<MapAnnotation> anns;
+
+        // 标注 1: 北京天安门 (红色 marker)
         MapAnnotation a1;
         a1.id = "demo-ann-1";
-        a1.latitude = 36.75;
-        a1.longitude = 3.05;
-        a1.title = "Demo Point";
+        a1.latitude = 39.9042;
+        a1.longitude = 116.4074;
+        a1.title = QStringLiteral("北京天安门");
         a1.iconName = "marker";
         anns.append(a1);
 
-        // 添加标注到地图
-        m_mapContainer->setAnnotations(anns, icons);
+        // 标注 2: 上海外滩 (蓝色 flag)
+        MapAnnotation a2;
+        a2.id = "demo-ann-2";
+        a2.latitude = 31.2304;
+        a2.longitude = 121.4737;
+        a2.title = QStringLiteral("上海外滩");
+        a2.iconName = "flag";
+        anns.append(a2);
+
+        // 标注 3: 广州塔 (红色 marker)
+        MapAnnotation a3;
+        a3.id = "demo-ann-3";
+        a3.latitude = 23.1291;
+        a3.longitude = 113.2644;
+        a3.title = QStringLiteral("广州塔");
+        a3.iconName = "marker";
+        anns.append(a3);
+
+        m_mapContainer->registerAnnotationIcons(icons);
+        m_mapContainer->setAnnotations(anns);
+
+        // 自动缩放到包含所有标注
+        m_mapContainer->setCenter(31.75, 116.70);
+        m_mapContainer->setZoom(5.0);
     });
 
     auto *btnAnnHide = new QPushButton(QStringLiteral("隐藏标注"), m_controlPanel);
@@ -336,14 +371,36 @@ MainWindow::MainWindow(QWidget *parent)
     scrollLayout->addWidget(btnRouteAdd);
     connect(btnRouteAdd, &QPushButton::clicked, this, [this]() {
         QVector<MapRouteSegment> segs;
-        MapRouteSegment seg;
-        seg.id = "demo-route-1";
-        seg.routeId = "route-A";
-        seg.coordinates = {{36.75, 3.05}, {36.76, 3.06}, {36.77, 3.07}};
-        seg.color = QColor(255, 0, 0);
-        seg.width = 3.0;
-        seg.dashed = false;
-        segs.append(seg);
+
+        // 红色实线线路 (route-A)
+        MapRouteSegment seg1;
+        seg1.id = "demo-route-1";
+        seg1.routeId = "route-A";
+        seg1.coordinates = {{36.75, 3.05}, {36.76, 3.06}, {36.77, 3.07}};
+        seg1.color = QColor(255, 0, 0);
+        seg1.width = 4.0;
+        seg1.dashed = false;
+        segs.append(seg1);
+
+        // 蓝色虚线线路 (route-B)
+        MapRouteSegment seg2;
+        seg2.id = "demo-route-2";
+        seg2.routeId = "route-B";
+        seg2.coordinates = {{36.74, 3.08}, {36.75, 3.09}, {36.76, 3.10}};
+        seg2.color = QColor(0, 100, 255);
+        seg2.width = 3.0;
+        seg2.dashed = true;
+        segs.append(seg2);
+
+        // 绿色实线线路 (route-C)
+        MapRouteSegment seg3;
+        seg3.id = "demo-route-3";
+        seg3.routeId = "route-C";
+        seg3.coordinates = {{36.78, 3.03}, {36.78, 3.05}, {36.78, 3.07}};
+        seg3.color = QColor(0, 200, 0);
+        seg3.width = 5.0;
+        seg3.dashed = false;
+        segs.append(seg3);
 
         m_mapContainer->setRoutes(segs);
     });
@@ -419,7 +476,7 @@ MainWindow::MainWindow(QWidget *parent)
         poly1.strokeColor = QColor(255, 0, 0);
         poly1.strokeWidth = 2.0;
         poly1.strokeDashed = false;
-        poly1.title = "红色区域";
+        poly1.title = QStringLiteral("红色区域");
         polys.append(poly1);
 
         // 蓝色虚线边框三角形
@@ -433,8 +490,22 @@ MainWindow::MainWindow(QWidget *parent)
         poly2.strokeColor = QColor(0, 0, 255);
         poly2.strokeWidth = 2.0;
         poly2.strokeDashed = true;
-        poly2.title = "蓝色三角";
+        poly2.title = QStringLiteral("蓝色三角");
         polys.append(poly2);
+
+        // 绿色五边形 - 无填充、粗实线边框
+        MapPolygon poly3;
+        poly3.id = "demo-poly-3";
+        poly3.polygonId = "polygon-demo-C";
+        poly3.coordinates = {{36.80, 3.05}, {36.81, 3.06}, {36.805, 3.08}, {36.795, 3.08}, {36.79, 3.06}};
+        poly3.fillEnabled = false;
+        poly3.fillColor = QColor(0, 0, 0);
+        poly3.fillOpacity = 0.0;
+        poly3.strokeColor = QColor(0, 200, 0);
+        poly3.strokeWidth = 4.0;
+        poly3.strokeDashed = false;
+        poly3.title = QStringLiteral("绿色五边形");
+        polys.append(poly3);
 
         m_mapContainer->setPolygons(polys);
     });
@@ -469,6 +540,242 @@ MainWindow::MainWindow(QWidget *parent)
     scrollLayout->addWidget(btnPolygonClear);
     connect(btnPolygonClear, &QPushButton::clicked, this, [this]() {
         m_mapContainer->clearPolygons();
+    });
+
+    // ===== 导出/导入 GeoJSON =====
+    auto *btnExportGeoJson = new QPushButton(QStringLiteral("导出GeoJSON"), m_controlPanel);
+    btnExportGeoJson->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #2196F3; color: white; padding: 6px; border-radius: 3px; font-size: 11px; }"
+        "QPushButton:hover { background-color: #1976D2; }"));
+    scrollLayout->addWidget(btnExportGeoJson);
+    connect(btnExportGeoJson, &QPushButton::clicked, this, [this]() {
+        QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("选择导出目录"));
+        if (dir.isEmpty()) return;
+
+        QDir().mkpath(dir);
+
+        // Export annotations
+        QByteArray annData = GeoJsonExporter::buildAnnotations(m_mapContainer->annotations());
+        QFile annFile(dir + "/annotations.geojson");
+        if (annFile.open(QIODevice::WriteOnly)) {
+            annFile.write(annData);
+            annFile.close();
+        }
+
+        // Export routes
+        QByteArray routeData = GeoJsonExporter::buildRoutes(m_mapContainer->segments());
+        QFile routeFile(dir + "/routes.geojson");
+        if (routeFile.open(QIODevice::WriteOnly)) {
+            routeFile.write(routeData);
+            routeFile.close();
+        }
+
+        // Export polygons
+        QByteArray polyData = GeoJsonExporter::buildPolygons(m_mapContainer->polygons());
+        QFile polyFile(dir + "/polygons.geojson");
+        if (polyFile.open(QIODevice::WriteOnly)) {
+            polyFile.write(polyData);
+            polyFile.close();
+        }
+
+        qDebug() << "Exported to" << dir;
+    });
+
+    auto *btnImportGeoJson = new QPushButton(QStringLiteral("导入GeoJSON"), m_controlPanel);
+    btnImportGeoJson->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #FF9800; color: white; padding: 6px; border-radius: 3px; font-size: 11px; }"
+        "QPushButton:hover { background-color: #F57C00; }"));
+    scrollLayout->addWidget(btnImportGeoJson);
+    connect(btnImportGeoJson, &QPushButton::clicked, this, [this]() {
+        QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("选择导入目录"));
+        if (dir.isEmpty()) return;
+
+        // Import annotations
+        QFile annFile(dir + "/annotations.geojson");
+        if (annFile.exists() && annFile.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            auto anns = GeoJsonImporter::parseAnnotations(annFile.readAll(), &ok);
+            annFile.close();
+            if (ok) {
+                m_mapContainer->clearAnnotations();
+                m_mapContainer->addAnnotations(anns);
+            }
+        }
+
+        // Import routes
+        QFile routeFile(dir + "/routes.geojson");
+        if (routeFile.exists() && routeFile.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            auto segs = GeoJsonImporter::parseRoutes(routeFile.readAll(), &ok);
+            routeFile.close();
+            if (ok) {
+                m_mapContainer->clearRoutes();
+                m_mapContainer->addRouteSegments(segs);
+            }
+        }
+
+        // Import polygons
+        QFile polyFile(dir + "/polygons.geojson");
+        if (polyFile.exists() && polyFile.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            auto polys = GeoJsonImporter::parsePolygons(polyFile.readAll(), &ok);
+            polyFile.close();
+            if (ok) {
+                m_mapContainer->clearPolygons();
+                m_mapContainer->addPolygons(polys);
+            }
+        }
+
+        qDebug() << "Imported from" << dir;
+    });
+
+    // ── 重置全部数据按钮 ──
+    auto *btnResetData = new QPushButton(QStringLiteral("重置全部数据"), m_controlPanel);
+    btnResetData->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #757575; color: white; padding: 6px; border-radius: 3px; font-size: 11px; }"
+        "QPushButton:hover { background-color: #616161; }"));
+    scrollLayout->addWidget(btnResetData);
+    connect(btnResetData, &QPushButton::clicked, this, [this]() {
+        m_mapContainer->clearAnnotations();
+        m_mapContainer->clearRoutes();
+        m_mapContainer->clearPolygons();
+        m_mapContainer->hideLocation();
+    });
+
+    // ── 导出示例按钮 ──
+    auto *btnExportDemo = new QPushButton(QStringLiteral("导出示例"), m_controlPanel);
+    btnExportDemo->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #2196F3; color: white; padding: 6px; border-radius: 3px; font-size: 11px; }"
+        "QPushButton:hover { background-color: #1976D2; }"));
+    scrollLayout->addWidget(btnExportDemo);
+    connect(btnExportDemo, &QPushButton::clicked, this, [this]() {
+        QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/mapviewer_export_demo";
+        QDir().mkpath(dir);
+
+        // 创建示例标注数据并导出
+        QVector<MapAnnotation> demoAnns;
+        MapAnnotation da;
+        da.id = "export-demo-1";
+        da.latitude = 36.75;
+        da.longitude = 3.05;
+        da.title = QStringLiteral("导出示例点");
+        da.iconName = "marker";
+        demoAnns.append(da);
+
+        QByteArray annData = GeoJsonExporter::buildAnnotations(demoAnns);
+        QFile annFile(dir + "/annotations.geojson");
+        if (annFile.open(QIODevice::WriteOnly)) {
+            annFile.write(annData);
+            annFile.close();
+        }
+
+        // 创建示例线路数据并导出
+        QVector<MapRouteSegment> demoSegs;
+        MapRouteSegment ds;
+        ds.id = "export-demo-route-1";
+        ds.routeId = "export-route-A";
+        ds.coordinates = {{36.75, 3.05}, {36.76, 3.06}};
+        ds.color = QColor(255, 0, 0);
+        ds.width = 3.0;
+        ds.dashed = false;
+        demoSegs.append(ds);
+
+        QByteArray routeData = GeoJsonExporter::buildRoutes(demoSegs);
+        QFile routeFile(dir + "/routes.geojson");
+        if (routeFile.open(QIODevice::WriteOnly)) {
+            routeFile.write(routeData);
+            routeFile.close();
+        }
+
+        // 创建示例多边形数据并导出
+        QVector<MapPolygon> demoPolys;
+        MapPolygon dp;
+        dp.id = "export-demo-poly-1";
+        dp.polygonId = "export-polygon-A";
+        dp.coordinates = {{36.74, 3.04}, {36.76, 3.04}, {36.76, 3.06}};
+        dp.fillEnabled = true;
+        dp.fillColor = QColor(0, 200, 0);
+        dp.fillOpacity = 0.3;
+        dp.strokeColor = QColor(0, 200, 0);
+        dp.strokeWidth = 2.0;
+        dp.strokeDashed = false;
+        demoPolys.append(dp);
+
+        QByteArray polyData = GeoJsonExporter::buildPolygons(demoPolys);
+        QFile polyFile(dir + "/polygons.geojson");
+        if (polyFile.open(QIODevice::WriteOnly)) {
+            polyFile.write(polyData);
+            polyFile.close();
+        }
+
+        qDebug() << "Demo exported to" << dir;
+    });
+
+    // ── 导入示例按钮 ──
+    auto *btnImportDemo = new QPushButton(QStringLiteral("导入示例"), m_controlPanel);
+    btnImportDemo->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #FF9800; color: white; padding: 6px; border-radius: 3px; font-size: 11px; }"
+        "QPushButton:hover { background-color: #F57C00; }"));
+    scrollLayout->addWidget(btnImportDemo);
+    connect(btnImportDemo, &QPushButton::clicked, this, [this]() {
+        QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/mapviewer_import_demo";
+        QDir().mkpath(dir);
+
+        // 写入示例 GeoJSON 标注文件
+        QFile annFile(dir + "/annotations.geojson");
+        if (annFile.open(QIODevice::WriteOnly)) {
+            annFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[3.05,36.75]},"properties":{"id":"import-demo-1","title":"导入示例点","iconName":"marker"}}]})");
+            annFile.close();
+        }
+
+        // 写入示例 GeoJSON 线路文件
+        QFile routeFile(dir + "/routes.geojson");
+        if (routeFile.open(QIODevice::WriteOnly)) {
+            routeFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[3.05,36.75],[3.06,36.76],[3.07,36.77]]},"properties":{"id":"import-route-1","routeId":"import-route-A","color":"#FF0000","width":3.0,"dashed":false}}]})");
+            routeFile.close();
+        }
+
+        // 写入示例 GeoJSON 多边形文件
+        QFile polyFile(dir + "/polygons.geojson");
+        if (polyFile.open(QIODevice::WriteOnly)) {
+            polyFile.write(R"({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[3.04,36.74],[3.04,36.76],[3.06,36.76],[3.06,36.74],[3.04,36.74]]]},"properties":{"id":"import-poly-1","polygonId":"import-polygon-A","fillEnabled":true,"fillColor":"#00FF00","fillOpacity":0.3,"strokeColor":"#00FF00","strokeWidth":2.0,"strokeDashed":false,"title":"导入示例区域"}}]})");
+            polyFile.close();
+        }
+
+        // 导入标注
+        if (annFile.exists() && annFile.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            auto anns = GeoJsonImporter::parseAnnotations(annFile.readAll(), &ok);
+            annFile.close();
+            if (ok) {
+                m_mapContainer->clearAnnotations();
+                m_mapContainer->addAnnotations(anns);
+            }
+        }
+
+        // 导入线路
+        if (routeFile.exists() && routeFile.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            auto segs = GeoJsonImporter::parseRoutes(routeFile.readAll(), &ok);
+            routeFile.close();
+            if (ok) {
+                m_mapContainer->clearRoutes();
+                m_mapContainer->addRouteSegments(segs);
+            }
+        }
+
+        // 导入多边形
+        if (polyFile.exists() && polyFile.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            auto polys = GeoJsonImporter::parsePolygons(polyFile.readAll(), &ok);
+            polyFile.close();
+            if (ok) {
+                m_mapContainer->clearPolygons();
+                m_mapContainer->addPolygons(polys);
+            }
+        }
+
+        qDebug() << "Demo imported from" << dir;
     });
 
     // ── 位置 API 演示 ──

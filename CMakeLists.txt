@@ -163,6 +163,10 @@ qt_add_executable(appuntitled
     polygongeojsonbuilder.cpp
     polygonmanager.h
     polygonmanager.cpp
+    geojsonexporter.h
+    geojsonexporter.cpp
+    geojsonimporter.h
+    geojsonimporter.cpp
     locationindicatormanager.h
     locationindicatormanager.cpp
     testrunner.h

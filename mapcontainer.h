@@ -428,8 +428,52 @@ public:
      *
      * @see addAnnotation(), removeAnnotation(), clearAnnotations()
      */
-    void setAnnotations(const QVector<MapAnnotation>& annotations,
-                        const QMap<QString, QImage>& icons);
+    /**
+     * @brief 注册单个标注图标
+     *
+     * 在使用 addAnnotation()/addAnnotations()/setAnnotations() 添加标注前，
+     * 先注册图标。同一图标可多次注册（幂等）。
+     *
+     * @param name  图标名称，对应 annotation.iconName
+     * @param image 图标图片
+     *
+     * @see registerAnnotationIcons(), addAnnotation(), setAnnotations()
+     */
+    void registerAnnotationIcon(const QString& name, const QImage& image);
+
+    /**
+     * @brief 批量注册标注图标
+     *
+     * @param icons 图标映射表，key 对应 annotation.iconName，value 为 QImage
+     *
+     * @see registerAnnotationIcon(), addAnnotation(), setAnnotations()
+     */
+    void registerAnnotationIcons(const QMap<QString, QImage>& icons);
+
+    /**
+     * @brief 批量设置标注（替换全部）
+     *
+     * 清除所有现有标注，用新的列表替换。
+     * 图标需事先通过 registerAnnotationIcon()/registerAnnotationIcons() 注册。
+     *
+     * @param annotations 标注列表，每个包含 id/latitude/longitude/title/iconName
+     *
+     * @code
+     * QMap<QString, QImage> icons;
+     * icons["marker"] = QImage(":/icons/marker.png");
+     * icons["shop"] = QImage(":/icons/shop.png");
+     * mapContainer->registerAnnotationIcons(icons);
+     *
+     * QVector<MapAnnotation> anns = {
+     *     { .id="p1", .latitude=39.9, .longitude=116.4, .title="天安门", .iconName="marker" },
+     *     { .id="p2", .latitude=31.2, .longitude=121.5, .title="外滩", .iconName="shop" }
+     * };
+     * mapContainer->setAnnotations(anns);
+     * @endcode
+     *
+     * @see addAnnotation(), removeAnnotation(), clearAnnotations()
+     */
+    void setAnnotations(const QVector<MapAnnotation>& annotations);
 
     /**
      * @brief 清除全部标注和图标
@@ -443,8 +487,9 @@ public:
     /**
      * @brief 添加单个标注
      *
+     * 图标需事先通过 registerAnnotationIcon()/registerAnnotationIcons() 注册。
+     *
      * @param annotation 标注数据
-     * @param icon       标注图标（如果 iconName 对应的图标尚未注册，需传入）
      *
      * @code
      * MapAnnotation ann;
@@ -453,24 +498,23 @@ public:
      * ann.longitude = 116.4074;
      * ann.title = "北京天安门";
      * ann.iconName = "marker";
-     * mapContainer->addAnnotation(ann, QImage(":/icons/marker.png"));
+     * mapContainer->addAnnotation(ann);
      * @endcode
      *
      * @see addAnnotations(), setAnnotations()
      */
-    void addAnnotation(const MapAnnotation& annotation,
-                       const QImage& icon = QImage());
+    void addAnnotation(const MapAnnotation& annotation);
 
     /**
      * @brief 批量添加标注
      *
+     * 图标需事先通过 registerAnnotationIcon()/registerAnnotationIcons() 注册。
+     *
      * @param annotations 标注列表
-     * @param icons       需要注册的图标映射表
      *
      * @see addAnnotation(), setAnnotations()
      */
-    void addAnnotations(const QVector<MapAnnotation>& annotations,
-                        const QMap<QString, QImage>& icons);
+    void addAnnotations(const QVector<MapAnnotation>& annotations);
 
     /**
      * @brief 移除单个标注（按ID）
@@ -662,6 +706,54 @@ public:
     QStringList allPolygonIds() const;
     QStringList visiblePolygonIds() const;
     bool focusOnPolygon(const QString& polygonId, int durationMs = -1);
+
+    /**
+     * @brief 获取所有标注数据
+     *
+     * 返回当前标注管理器中所有标注的副本。可用于导出、序列化或遍历查询。
+     *
+     * @return 标注数据的 QVector 副本
+     *
+     * @code
+     * auto anns = mapContainer->annotations();
+     * QByteArray geojson = GeoJsonExporter::buildAnnotations(anns);
+     * @endcode
+     *
+     * @see setAnnotations(), AnnotationManager::annotations()
+     */
+    QVector<MapAnnotation> annotations() const;
+
+    /**
+     * @brief 获取所有线路段数据
+     *
+     * 返回当前线路管理器中所有线路段的副本。
+     *
+     * @return 线路段数据的 QVector 副本
+     *
+     * @code
+     * auto segs = mapContainer->segments();
+     * QByteArray geojson = GeoJsonExporter::buildRoutes(segs);
+     * @endcode
+     *
+     * @see setRoutes(), RouteManager::segments()
+     */
+    QVector<MapRouteSegment> segments() const;
+
+    /**
+     * @brief 获取所有多边形数据
+     *
+     * 返回当前多边形管理器中所有多边形的副本。
+     *
+     * @return 多边形数据的 QVector 副本
+     *
+     * @code
+     * auto polys = mapContainer->polygons();
+     * QByteArray geojson = GeoJsonExporter::buildPolygons(polys);
+     * @endcode
+     *
+     * @see setPolygons(), PolygonManager::polygons()
+     */
+    QVector<MapPolygon> polygons() const;
 
     // ===== 位置指示器接口 =====
 

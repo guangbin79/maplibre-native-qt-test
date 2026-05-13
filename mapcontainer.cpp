@@ -638,23 +638,28 @@ void MapContainer::resizeEvent(QResizeEvent *event) {
 
 // ===== 标注管理委托方法 =====
 
-void MapContainer::setAnnotations(const QVector<MapAnnotation>& annotations,
-                                   const QMap<QString, QImage>& icons) {
-    m_annotationManager->setAnnotations(annotations, icons);
+void MapContainer::registerAnnotationIcon(const QString& name, const QImage& image) {
+    m_annotationManager->registerIcon(name, image);
+}
+
+void MapContainer::registerAnnotationIcons(const QMap<QString, QImage>& icons) {
+    m_annotationManager->registerAllIcons(icons);
+}
+
+void MapContainer::setAnnotations(const QVector<MapAnnotation>& annotations) {
+    m_annotationManager->setAnnotations(annotations);
 }
 
 void MapContainer::clearAnnotations() {
     m_annotationManager->clearAnnotations();
 }
 
-void MapContainer::addAnnotation(const MapAnnotation& annotation,
-                                  const QImage& icon) {
-    m_annotationManager->addAnnotation(annotation, icon);
+void MapContainer::addAnnotation(const MapAnnotation& annotation) {
+    m_annotationManager->addAnnotation(annotation);
 }
 
-void MapContainer::addAnnotations(const QVector<MapAnnotation>& annotations,
-                                   const QMap<QString, QImage>& icons) {
-    m_annotationManager->addAnnotations(annotations, icons);
+void MapContainer::addAnnotations(const QVector<MapAnnotation>& annotations) {
+    m_annotationManager->addAnnotations(annotations);
 }
 
 void MapContainer::removeAnnotation(const QString& id) {
@@ -809,6 +814,18 @@ bool MapContainer::focusOnPolygon(const QString& polygonId, int durationMs) {
     animateTo(centerLat, centerLon, zoom,
               map()->bearing(), map()->pitch(), durationMs);
     return true;
+}
+
+QVector<MapAnnotation> MapContainer::annotations() const {
+    return m_annotationManager ? m_annotationManager->annotations() : QVector<MapAnnotation>();
+}
+
+QVector<MapRouteSegment> MapContainer::segments() const {
+    return m_routeManager ? m_routeManager->segments() : QVector<MapRouteSegment>();
+}
+
+QVector<MapPolygon> MapContainer::polygons() const {
+    return m_polygonManager ? m_polygonManager->polygons() : QVector<MapPolygon>();
 }
 
 // ===== 位置指示器委托方法 =====
