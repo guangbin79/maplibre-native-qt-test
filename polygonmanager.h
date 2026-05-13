@@ -33,6 +33,22 @@ public:
     QStringList allPolygonIds() const;
     QStringList visiblePolygonIds() const;
 
+    /**
+     * @brief 获取所有多边形数据
+     *
+     * 返回当前管理器中所有多边形的副本。可用于导出、序列化或遍历查询。
+     *
+     * @return 多边形数据的 QVector 副本
+     *
+     * @code
+     * auto polys = manager->polygons();
+     * QByteArray geojson = GeoJsonExporter::buildPolygons(polys);
+     * @endcode
+     *
+     * @see setPolygons(), GeoJsonExporter::buildPolygons()
+     */
+    QVector<MapPolygon> polygons() const;
+
     bool boundingBoxForPolygon(const QString& polygonId,
                                 QMapLibre::Coordinate& sw,
                                 QMapLibre::Coordinate& ne) const;

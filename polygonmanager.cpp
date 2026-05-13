@@ -20,6 +20,10 @@ QStringList PolygonManager::visiblePolygonIds() const {
     return m_visiblePolygonIds;
 }
 
+QVector<MapPolygon> PolygonManager::polygons() const {
+    return m_polygons;
+}
+
 bool PolygonManager::boundingBoxForPolygon(const QString& polygonId,
                                             QMapLibre::Coordinate& sw,
                                             QMapLibre::Coordinate& ne) const {

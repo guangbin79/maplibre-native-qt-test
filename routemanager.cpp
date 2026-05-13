@@ -20,6 +20,10 @@ QStringList RouteManager::visibleRouteIds() const {
     return m_visibleRouteIds;
 }
 
+QVector<MapRouteSegment> RouteManager::segments() const {
+    return m_segments;
+}
+
 bool RouteManager::boundingBoxForRoute(const QString& routeId,
                                        QMapLibre::Coordinate& sw,
                                        QMapLibre::Coordinate& ne) const {

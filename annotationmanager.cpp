@@ -19,8 +19,7 @@ void AnnotationManager::setMapReady(bool ready)
     m_ready = ready;
 }
 
-void AnnotationManager::setAnnotations(const QVector<MapAnnotation>& annotations,
-                                         const QMap<QString, QImage>& icons)
+void AnnotationManager::setAnnotations(const QVector<MapAnnotation>& annotations)
 {
     if (!m_ready)
         return;
@@ -30,7 +29,11 @@ void AnnotationManager::setAnnotations(const QVector<MapAnnotation>& annotations
     m_annotations = annotations;
     m_visibleIds = allIds();
 
-    registerAllIcons(icons);
+    for (const auto& ann : m_annotations) {
+        if (!ann.iconName.isEmpty()) {
+            m_iconRefCount[ann.iconName]++;
+        }
+    }
 
     ensureLayerSetup();
 
@@ -55,7 +58,7 @@ void AnnotationManager::clearAnnotations()
     m_visibleIds.clear();
 }
 
-void AnnotationManager::addAnnotation(const MapAnnotation& annotation, const QImage& icon)
+void AnnotationManager::addAnnotation(const MapAnnotation& annotation)
 {
     if (!m_ready)
         return;
@@ -63,9 +66,7 @@ void AnnotationManager::addAnnotation(const MapAnnotation& annotation, const QIm
     m_annotations.append(annotation);
     m_visibleIds.append(annotation.id);
 
-    if (!icon.isNull()) {
-        registerIcon(annotation.iconName, icon);
-    } else if (!annotation.iconName.isEmpty()) {
+    if (!annotation.iconName.isEmpty()) {
         m_iconRefCount[annotation.iconName]++;
     }
 
@@ -73,11 +74,10 @@ void AnnotationManager::addAnnotation(const MapAnnotation& annotation, const QIm
     rebuildSource();
 }
 
-void AnnotationManager::addAnnotations(const QVector<MapAnnotation>& annotations,
-                                         const QMap<QString, QImage>& icons)
+void AnnotationManager::addAnnotations(const QVector<MapAnnotation>& annotations)
 {
     for (const auto& ann : annotations)
-        addAnnotation(ann, icons.value(ann.iconName));
+        addAnnotation(ann);
 }
 
 void AnnotationManager::removeAnnotation(const QString& id)
@@ -133,6 +133,11 @@ QStringList AnnotationManager::allIds() const
 QStringList AnnotationManager::visibleIds() const
 {
     return m_visibleIds;
+}
+
+QVector<MapAnnotation> AnnotationManager::annotations() const
+{
+    return m_annotations;
 }
 
 void AnnotationManager::ensureLayerSetup()
