@@ -14,6 +14,10 @@
 #include "testrunner.h"
 #include "hxgisserver.h"
 #include "mappolygon.h"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include "geojsonexporter.h"
+#include "geojsonimporter.h"
 
 class GuiTest : public QObject {
     Q_OBJECT
@@ -37,6 +41,8 @@ private slots:
     void testFixedModePanAllowed();
     void testPolygonApi();
     void testPolygonFocus();
+    void testGeoJsonExport();
+    void testGeoJsonImport();
 
 private:
     MainWindow *m_window = nullptr;
@@ -261,7 +267,8 @@ void GuiTest::testAnnotationApi()
     a1.iconName = "marker";
     anns.append(a1);
 
-    m_map->setAnnotations(anns, icons);
+    m_map->registerAnnotationIcons(icons);
+    m_map->setAnnotations(anns);
     QTest::qWait(2000);
     captureScreenshot("03_annotation_added");
 
@@ -570,6 +577,222 @@ void GuiTest::testFixedModePanAllowed()
     QVERIFY2(resumeLatDiff < 0.01 && resumeLonDiff < 0.01,
              QStringLiteral("Map did not resume to location! delta=(%1, %2)")
                  .arg(resumeLatDiff).arg(resumeLonDiff).toUtf8());
+}
+
+void GuiTest::testGeoJsonExport() {
+    log("testGeoJsonExport: testing GeoJSON export");
+
+    // Step 1: Add test data
+    QVector<MapAnnotation> anns;
+    MapAnnotation ann;
+    ann.id = "gui-export-ann-1";
+    ann.latitude = 39.9042;
+    ann.longitude = 116.4074;
+    ann.title = "ExportTest";
+    ann.iconName = "marker";
+    anns.append(ann);
+    m_map->setAnnotations(anns);
+
+    QVector<MapRouteSegment> segs;
+    MapRouteSegment seg;
+    seg.id = "gui-export-seg-1";
+    seg.routeId = "export-route";
+    seg.coordinates = {{39.9042, 116.4074}, {39.9163, 116.3972}};
+    seg.color = QColor("#FF5722");
+    seg.width = 4.0;
+    seg.dashed = false;
+    seg.title = "ExportRoute";
+    segs.append(seg);
+    m_map->setRoutes(segs);
+
+    QVector<MapPolygon> polys;
+    MapPolygon poly;
+    poly.id = "gui-export-poly-1";
+    poly.polygonId = "export-poly";
+    poly.coordinates = {{39.9042, 116.4074}, {39.9163, 116.3972}, {39.9300, 116.3900}};
+    poly.fillEnabled = true;
+    poly.fillColor = QColor("#FF0000");
+    poly.fillOpacity = 0.5;
+    poly.strokeColor = QColor("#000000");
+    poly.strokeWidth = 2.0;
+    poly.strokeDashed = false;
+    poly.title = "ExportPoly";
+    polys.append(poly);
+    m_map->setPolygons(polys);
+
+    QTest::qWait(2000);
+    captureScreenshot("27_export_data_ready");
+
+    // Step 2: Export to temp directory
+    QString tempDir = QDir::tempPath() + "/geojson_export_test";
+    QDir().mkpath(tempDir);
+
+    QByteArray annData = GeoJsonExporter::buildAnnotations(m_map->annotations());
+    QFile annFile(tempDir + "/annotations.geojson");
+    QVERIFY(annFile.open(QIODevice::WriteOnly));
+    annFile.write(annData);
+    annFile.close();
+
+    QByteArray routeData = GeoJsonExporter::buildRoutes(m_map->segments());
+    QFile routeFile(tempDir + "/routes.geojson");
+    QVERIFY(routeFile.open(QIODevice::WriteOnly));
+    routeFile.write(routeData);
+    routeFile.close();
+
+    QByteArray polyData = GeoJsonExporter::buildPolygons(m_map->polygons());
+    QFile polyFile(tempDir + "/polygons.geojson");
+    QVERIFY(polyFile.open(QIODevice::WriteOnly));
+    polyFile.write(polyData);
+    polyFile.close();
+
+    log("Exported to: " + tempDir);
+
+    // Step 3: Verify files exist and are valid JSON
+    QVERIFY(QFile::exists(tempDir + "/annotations.geojson"));
+    QVERIFY(QFile::exists(tempDir + "/routes.geojson"));
+    QVERIFY(QFile::exists(tempDir + "/polygons.geojson"));
+
+    // Verify each file is valid JSON
+    QFile f1(tempDir + "/annotations.geojson");
+    QVERIFY(f1.open(QIODevice::ReadOnly));
+    QJsonDocument d1 = QJsonDocument::fromJson(f1.readAll());
+    QVERIFY(!d1.isNull());
+    QVERIFY(d1.object()["type"].toString() == "FeatureCollection");
+    f1.close();
+
+    captureScreenshot("28_export_completed");
+
+    // Cleanup temp files
+    QFile::remove(tempDir + "/annotations.geojson");
+    QFile::remove(tempDir + "/routes.geojson");
+    QFile::remove(tempDir + "/polygons.geojson");
+    QDir().rmdir(tempDir);
+
+    // Clear map
+    m_map->clearAnnotations();
+    m_map->clearRoutes();
+    m_map->clearPolygons();
+    QTest::qWait(500);
+    captureScreenshot("29_export_cleanup");
+}
+
+void GuiTest::testGeoJsonImport() {
+    log("testGeoJsonImport: testing GeoJSON import");
+
+    // Step 1: Create test GeoJSON files
+    QString tempDir = QDir::tempPath() + "/geojson_import_test";
+    QDir().mkpath(tempDir);
+
+    // Create annotations file
+    QByteArray annJson = R"({
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [116.4074, 39.9042]},
+            "properties": {"id": "import-ann-1", "title": "ImportedAnn", "icon": "marker"}
+        }]
+    })";
+    QFile annFile(tempDir + "/annotations.geojson");
+    QVERIFY(annFile.open(QIODevice::WriteOnly));
+    annFile.write(annJson);
+    annFile.close();
+
+    // Create routes file
+    QByteArray routeJson = R"({
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": {"type": "LineString", "coordinates": [[116.4074,39.9042],[116.3972,39.9163]]},
+            "properties": {"id": "import-seg-1", "routeId": "import-route", "color": "#00FF00", "width": 3.0, "lineType": "dashed", "title": "ImportedRoute"}
+        }]
+    })";
+    QFile routeFile(tempDir + "/routes.geojson");
+    QVERIFY(routeFile.open(QIODevice::WriteOnly));
+    routeFile.write(routeJson);
+    routeFile.close();
+
+    // Create polygons file
+    QByteArray polyJson = R"({
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [[[116.4074,39.9042],[116.3972,39.9163],[116.3900,39.9300],[116.4074,39.9042]]]},
+            "properties": {"id": "import-poly-1", "polygonId": "import-poly", "fillEnabled": true, "fillColor": "#0000FF", "fillOpacity": 0.7, "strokeColor": "#FFFFFF", "strokeWidth": 4.0, "strokeDashed": true, "title": "ImportedPoly"}
+        }]
+    })";
+    QFile polyFile(tempDir + "/polygons.geojson");
+    QVERIFY(polyFile.open(QIODevice::WriteOnly));
+    polyFile.write(polyJson);
+    polyFile.close();
+
+    // Step 2: Import
+    QFile f1(tempDir + "/annotations.geojson");
+    QVERIFY(f1.open(QIODevice::ReadOnly));
+    bool ok1 = false;
+    auto anns = GeoJsonImporter::parseAnnotations(f1.readAll(), &ok1);
+    QVERIFY(ok1);
+    f1.close();
+
+    QFile f2(tempDir + "/routes.geojson");
+    QVERIFY(f2.open(QIODevice::ReadOnly));
+    bool ok2 = false;
+    auto segs = GeoJsonImporter::parseRoutes(f2.readAll(), &ok2);
+    QVERIFY(ok2);
+    f2.close();
+
+    QFile f3(tempDir + "/polygons.geojson");
+    QVERIFY(f3.open(QIODevice::ReadOnly));
+    bool ok3 = false;
+    auto polys = GeoJsonImporter::parsePolygons(f3.readAll(), &ok3);
+    QVERIFY(ok3);
+    f3.close();
+
+    // Step 3: Add to map
+    m_map->clearAnnotations();
+    m_map->clearRoutes();
+    m_map->clearPolygons();
+
+    m_map->setAnnotations(anns);
+    m_map->setRoutes(segs);
+    m_map->setPolygons(polys);
+
+    QTest::qWait(2000);
+    captureScreenshot("30_import_data_loaded");
+
+    // Step 4: Verify
+    QVERIFY(m_map->allIds().contains("import-ann-1"));
+    QVERIFY(m_map->allRouteIds().contains("import-route"));
+    QVERIFY(m_map->allPolygonIds().contains("import-poly"));
+
+    // Verify specific properties
+    auto importedAnns = m_map->annotations();
+    QCOMPARE(importedAnns.size(), 1);
+    QCOMPARE(importedAnns[0].title, QString("ImportedAnn"));
+
+    auto importedSegs = m_map->segments();
+    QCOMPARE(importedSegs.size(), 1);
+    QCOMPARE(importedSegs[0].color.name(), QString("#00ff00"));
+    QVERIFY(importedSegs[0].dashed);
+
+    auto importedPolys = m_map->polygons();
+    QCOMPARE(importedPolys.size(), 1);
+    QCOMPARE(importedPolys[0].fillColor.name(), QString("#0000ff"));
+    QCOMPARE(importedPolys[0].fillOpacity, 0.7);
+    QVERIFY(importedPolys[0].strokeDashed);
+
+    captureScreenshot("31_import_verified");
+
+    // Cleanup
+    QFile::remove(tempDir + "/annotations.geojson");
+    QFile::remove(tempDir + "/routes.geojson");
+    QFile::remove(tempDir + "/polygons.geojson");
+    QDir().rmdir(tempDir);
+
+    m_map->clearAnnotations();
+    m_map->clearRoutes();
+    m_map->clearPolygons();
+    QTest::qWait(500);
+    captureScreenshot("32_import_cleanup");
 }
 
 QTEST_MAIN(GuiTest)

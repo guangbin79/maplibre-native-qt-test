@@ -50,7 +50,7 @@ void TestAnnotationManager::testSetAnnotations()
     a2.iconName = "pin";
     anns.append(a2);
 
-    mgr.setAnnotations(anns, {});
+    mgr.setAnnotations(anns);
 
     QStringList ids = mgr.allIds();
     QCOMPARE(ids.size(), 2);
@@ -121,7 +121,7 @@ void TestAnnotationManager::testVisibleIds()
     a2.iconName = "pin";
     anns.append(a2);
 
-    mgr.setAnnotations(anns, {});
+    mgr.setAnnotations(anns);
     QCOMPARE(mgr.visibleIds().size(), 2);
 
     mgr.setVisibleIds({"a1"});
@@ -151,7 +151,7 @@ void TestAnnotationManager::testShowAllAnnotations()
     a2.iconName = "pin";
     anns.append(a2);
 
-    mgr.setAnnotations(anns, {});
+    mgr.setAnnotations(anns);
     mgr.hideAllAnnotations();
     QVERIFY(mgr.visibleIds().isEmpty());
 
@@ -200,8 +200,10 @@ void TestAnnotationManager::testIconRefCounting()
     a2.title = "Shanghai";
     a2.iconName = "marker";
 
-    mgr.addAnnotation(a1, icon);
-    mgr.addAnnotation(a2, icon);
+    mgr.registerIcon(a1.iconName, icon);
+    mgr.registerIcon(a2.iconName, icon);
+    mgr.addAnnotation(a1);
+    mgr.addAnnotation(a2);
 
     QStringList ids = mgr.allIds();
     QCOMPARE(ids.size(), 2);
@@ -227,7 +229,8 @@ void TestAnnotationManager::testRemoveLastIconRef()
     a.title = "Beijing";
     a.iconName = "marker";
 
-    mgr.addAnnotation(a, icon);
+    mgr.registerIcon(a.iconName, icon);
+    mgr.addAnnotation(a);
     QCOMPARE(mgr.allIds().size(), 1);
 
     mgr.removeAnnotation("a1");
@@ -276,7 +279,7 @@ void TestAnnotationManager::testAddAnnotationsBatch()
     a2.iconName = "pin";
     anns.append(a2);
 
-    mgr.addAnnotations(anns, {});
+    mgr.addAnnotations(anns);
 
     QStringList ids = mgr.allIds();
     QCOMPARE(ids.size(), 2);
@@ -314,7 +317,7 @@ void TestAnnotationManager::testRemoveAnnotationsBatch()
     a3.iconName = "flag";
     anns.append(a3);
 
-    mgr.setAnnotations(anns, {});
+    mgr.setAnnotations(anns);
     QCOMPARE(mgr.allIds().size(), 3);
 
     mgr.removeAnnotations({"a1", "a2"});
@@ -339,7 +342,7 @@ void TestAnnotationManager::testSetVisibleIdsSubset()
         anns.append(a);
     }
 
-    mgr.setAnnotations(anns, {});
+    mgr.setAnnotations(anns);
     QCOMPARE(mgr.visibleIds().size(), 5);
 
     mgr.setVisibleIds({"a0", "a2", "a4"});
@@ -364,7 +367,7 @@ void TestAnnotationManager::testMapNotReady()
     mgr.addAnnotation(a);
     QVERIFY(mgr.allIds().isEmpty());
 
-    mgr.setAnnotations({a}, {});
+    mgr.setAnnotations({a});
     QVERIFY(mgr.allIds().isEmpty());
 }
 

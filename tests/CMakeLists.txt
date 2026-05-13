@@ -85,6 +85,26 @@ target_include_directories(tst_cameraanimation PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_cameraanimation PRIVATE Qt6::Test Qt6::Core)
 add_test(NAME tst_cameraanimation COMMAND tst_cameraanimation)
 
+# tst_geojsonexporter
+add_executable(tst_geojsonexporter tst_geojsonexporter.cpp ${CMAKE_SOURCE_DIR}/geojsonexporter.cpp)
+target_include_directories(tst_geojsonexporter PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_geojsonexporter PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+add_test(NAME tst_geojsonexporter COMMAND tst_geojsonexporter)
+
+# tst_geojsonimporter
+add_executable(tst_geojsonimporter tst_geojsonimporter.cpp ${CMAKE_SOURCE_DIR}/geojsonimporter.cpp)
+target_include_directories(tst_geojsonimporter PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_geojsonimporter PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+add_test(NAME tst_geojsonimporter COMMAND tst_geojsonimporter)
+
+# tst_geojsonroundtrip
+add_executable(tst_geojsonroundtrip tst_geojsonroundtrip.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonexporter.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonimporter.cpp)
+target_include_directories(tst_geojsonroundtrip PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_geojsonroundtrip PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+add_test(NAME tst_geojsonroundtrip COMMAND tst_geojsonroundtrip)
+
 # tst_gui - GUI end-to-end test
 add_executable(tst_gui tst_gui.cpp
     ${CMAKE_SOURCE_DIR}/mainwindow.cpp
@@ -99,6 +119,8 @@ add_executable(tst_gui tst_gui.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonexporter.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonimporter.cpp
     ${CMAKE_SOURCE_DIR}/testrunner.cpp
 )
 target_include_directories(tst_gui PRIVATE ${CMAKE_SOURCE_DIR} ${HXGISSERVER_INCLUDE_DIR} ${TTSPLAYER_INCLUDE_DIR})

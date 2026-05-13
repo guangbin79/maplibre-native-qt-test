@@ -179,7 +179,8 @@ void TestRunner::executeStep(TestStep step)
         {
             MapAnnotation ann = createAnnotation("test-ann-1", 39.9042, 116.4074,
                                                     QStringLiteral("天安门"), QStringLiteral("marker"));
-            m_mapContainer->addAnnotation(ann, m_testIcons["marker"]);
+            m_mapContainer->registerAnnotationIcons(m_testIcons);
+            m_mapContainer->addAnnotation(ann);
             QStringList ids = m_mapContainer->allIds();
             if (ids.contains("test-ann-1")) {
                 logTestPass("Single annotation added successfully");
@@ -211,7 +212,8 @@ void TestRunner::executeStep(TestStep step)
                                           QStringLiteral("外滩"), QStringLiteral("pin")));
             anns.append(createAnnotation("test-ann-3", 23.1291, 113.2644,
                                           QStringLiteral("广州塔"), QStringLiteral("star")));
-            m_mapContainer->addAnnotations(anns, m_testIcons);
+            m_mapContainer->registerAnnotationIcons(m_testIcons);
+            m_mapContainer->addAnnotations(anns);
 
             QStringList ids = m_mapContainer->allIds();
             if (ids.size() == 3) {
@@ -512,7 +514,8 @@ void TestRunner::executeStep(TestStep step)
             QVector<MapAnnotation> anns;
             anns.append(createAnnotation("combo-ann-1", 39.9, 116.4,
                                           QStringLiteral("Combo Point"), QStringLiteral("marker")));
-            m_mapContainer->setAnnotations(anns, m_testIcons);
+            m_mapContainer->registerAnnotationIcons(m_testIcons);
+            m_mapContainer->setAnnotations(anns);
 
             QVector<MapRouteSegment> segs;
             QVector<QPair<double, double>> coords;
