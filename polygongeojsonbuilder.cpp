@@ -35,13 +35,12 @@ static QJsonObject buildPolygonFeature(const MapPolygon& poly, const QJsonArray&
     properties["id"] = poly.id;
     properties["polygonId"] = poly.polygonId;
     properties["fillEnabled"] = poly.fillEnabled ? "true" : "false";
-    properties["fillColor"] = poly.fillColor.name(QColor::HexRgb);
+    properties["fillColor"] = poly.fillColor.name();
     properties["fillOpacity"] = poly.fillOpacity;
-    properties["strokeColor"] = poly.strokeColor.name(QColor::HexRgb);
+    properties["strokeColor"] = poly.strokeColor.name();
     properties["strokeWidth"] = poly.strokeWidth;
-    properties["strokeDashed"] = poly.strokeDashed ? "true" : "false";
-    properties["geometryType"] = "fill";
     properties["strokeType"] = poly.strokeDashed ? "dashed" : "solid";
+    properties["geometryType"] = "fill";
 
     QJsonObject feature;
     feature["type"] = "Feature";
@@ -59,7 +58,7 @@ static QJsonObject buildLineStringFeature(const MapPolygon& poly, const QJsonArr
     QJsonObject properties;
     properties["id"] = poly.id;
     properties["polygonId"] = poly.polygonId;
-    properties["strokeColor"] = poly.strokeColor.name(QColor::HexRgb);
+    properties["strokeColor"] = poly.strokeColor.name();
     properties["strokeWidth"] = poly.strokeWidth;
     properties["strokeType"] = poly.strokeDashed ? "dashed" : "solid";
     properties["geometryType"] = "outline";
