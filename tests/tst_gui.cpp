@@ -13,6 +13,7 @@
 #include "mapcontainer.h"
 #include "testrunner.h"
 #include "hxgisserver.h"
+#include "mappolygon.h"
 
 class GuiTest : public QObject {
     Q_OBJECT
@@ -34,6 +35,8 @@ private slots:
     void testAutoRunSequence();
     void testFixedModePanBlocked();
     void testFixedModePanAllowed();
+    void testPolygonApi();
+    void testPolygonFocus();
 
 private:
     MainWindow *m_window = nullptr;
@@ -50,7 +53,7 @@ private:
 void GuiTest::initTestCase()
 {
     log("initTestCase: starting HXGISServer");
-    QString rootPath = "/home/guangbin/Documents/untitled/build/linux-x86_64-test/map_data";
+    QString rootPath = "/home/guangbin/Documents/untitled/build/linux-x86_64/map_data";
     g_server = new HXGISServer("127.0.0.1:4943", rootPath.toUtf8().constData());
     QVERIFY2(g_server->isRunning(), "Failed to start HXGISServer");
     log(QStringLiteral("HXGISServer started, version: %1").arg(g_server->version()));
@@ -348,6 +351,102 @@ void GuiTest::testLocationApi()
     QTest::qWait(500);
     captureScreenshot("14_location_hidden");
     QVERIFY(!m_map->isLocationVisible());
+}
+
+void GuiTest::testPolygonApi()
+{
+    log("testPolygonApi: adding polygons");
+
+    QVector<MapPolygon> polys;
+
+    MapPolygon poly1;
+    poly1.id = "gui-poly-1";
+    poly1.polygonId = "poly-A";
+    poly1.coordinates = {{39.92, 116.40}, {39.92, 116.44}, {39.90, 116.44}, {39.90, 116.40}};
+    poly1.fillEnabled = true;
+    poly1.fillColor = QColor(255, 0, 0);
+    poly1.fillOpacity = 0.4;
+    poly1.strokeColor = QColor(255, 0, 0);
+    poly1.strokeWidth = 2.0;
+    poly1.strokeDashed = false;
+    poly1.title = QStringLiteral("红色区域");
+    polys.append(poly1);
+
+    MapPolygon poly2;
+    poly2.id = "gui-poly-2";
+    poly2.polygonId = "poly-B";
+    poly2.coordinates = {{39.88, 116.38}, {39.88, 116.42}, {39.86, 116.42}, {39.86, 116.38}};
+    poly2.fillEnabled = true;
+    poly2.fillColor = QColor(0, 0, 255);
+    poly2.fillOpacity = 0.3;
+    poly2.strokeColor = QColor(0, 0, 255);
+    poly2.strokeWidth = 2.0;
+    poly2.strokeDashed = true;
+    poly2.title = QStringLiteral("蓝色区域");
+    polys.append(poly2);
+
+    m_map->setPolygons(polys);
+    QTest::qWait(2000);
+    captureScreenshot("21_polygon_added");
+
+    QStringList ids = m_map->allPolygonIds();
+    QVERIFY(ids.contains("poly-A"));
+    QVERIFY(ids.contains("poly-B"));
+    QCOMPARE(m_map->visiblePolygonIds().size(), 2);
+
+    m_map->hideAllPolygons();
+    QTest::qWait(500);
+    captureScreenshot("22_polygon_hidden");
+    QVERIFY(m_map->visiblePolygonIds().isEmpty());
+
+    m_map->showAllPolygons();
+    QTest::qWait(500);
+    captureScreenshot("23_polygon_shown");
+    QCOMPARE(m_map->visiblePolygonIds().size(), 2);
+
+    m_map->clearPolygons();
+    QTest::qWait(500);
+    captureScreenshot("24_polygon_cleared");
+    QVERIFY(m_map->allPolygonIds().isEmpty());
+}
+
+void GuiTest::testPolygonFocus()
+{
+    log("testPolygonFocus: testing focusOnPolygon");
+
+    MapPolygon poly;
+    poly.id = "gui-poly-focus";
+    poly.polygonId = "poly-focus";
+    poly.coordinates = {{31.25, 121.45}, {31.25, 121.50}, {31.20, 121.50}, {31.20, 121.45}};
+    poly.fillEnabled = true;
+    poly.fillColor = QColor(76, 175, 80);
+    poly.fillOpacity = 0.5;
+    poly.strokeColor = QColor(76, 175, 80);
+    poly.strokeWidth = 3.0;
+    poly.strokeDashed = false;
+    poly.title = QStringLiteral("上海测试");
+
+    m_map->addPolygon(poly);
+    QTest::qWait(1000);
+
+    auto centerBefore = m_map->map()->coordinate();
+    log(QStringLiteral("Before focus: lat=%1 lon=%2").arg(centerBefore.first).arg(centerBefore.second));
+
+    m_map->focusOnPolygon("poly-focus");
+    QTest::qWait(2000);
+    captureScreenshot("25_polygon_focus");
+
+    auto centerAfter = m_map->map()->coordinate();
+    log(QStringLiteral("After focus: lat=%1 lon=%2").arg(centerAfter.first).arg(centerAfter.second));
+
+    QVERIFY2(qAbs(centerAfter.first - 31.225) < 0.1,
+             QStringLiteral("Focus did not move to polygon area (lat), got %1").arg(centerAfter.first).toUtf8());
+    QVERIFY2(qAbs(centerAfter.second - 121.475) < 0.1,
+             QStringLiteral("Focus did not move to polygon area (lon), got %1").arg(centerAfter.second).toUtf8());
+
+    m_map->clearPolygons();
+    QTest::qWait(500);
+    captureScreenshot("26_polygon_focus_cleared");
 }
 
 void GuiTest::testAutoRunSequence()

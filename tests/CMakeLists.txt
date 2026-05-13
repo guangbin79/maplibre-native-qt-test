@@ -31,11 +31,23 @@ target_include_directories(tst_maproutesegment PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_maproutesegment PRIVATE Qt6::Test Qt6::Gui)
 add_test(NAME tst_maproutesegment COMMAND tst_maproutesegment)
 
+# tst_mappolygon
+add_executable(tst_mappolygon tst_mappolygon.cpp)
+target_include_directories(tst_mappolygon PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_mappolygon PRIVATE Qt6::Test Qt6::Gui)
+add_test(NAME tst_mappolygon COMMAND tst_mappolygon)
+
 # tst_routegeojsonbuilder
 add_executable(tst_routegeojsonbuilder tst_routegeojsonbuilder.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp)
 target_include_directories(tst_routegeojsonbuilder PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_routegeojsonbuilder PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
 add_test(NAME tst_routegeojsonbuilder COMMAND tst_routegeojsonbuilder)
+
+# tst_polygongeojsonbuilder
+add_executable(tst_polygongeojsonbuilder tst_polygongeojsonbuilder.cpp ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp)
+target_include_directories(tst_polygongeojsonbuilder PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_polygongeojsonbuilder PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+add_test(NAME tst_polygongeojsonbuilder COMMAND tst_polygongeojsonbuilder)
 
 # tst_routemanager
 add_executable(tst_routemanager tst_routemanager.cpp ${CMAKE_SOURCE_DIR}/routemanager.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp)
@@ -43,6 +55,17 @@ target_include_directories(tst_routemanager PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_routemanager PRIVATE Qt6::Test Qt6::Core Qt6::Gui QMapLibre::Core)
 add_test(NAME tst_routemanager COMMAND tst_routemanager)
 set_tests_properties(tst_routemanager PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
+)
+
+# tst_polygonmanager
+add_executable(tst_polygonmanager tst_polygonmanager.cpp
+    ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
+    ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp)
+target_include_directories(tst_polygonmanager PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_polygonmanager PRIVATE Qt6::Test Qt6::Core Qt6::Gui QMapLibre::Core)
+add_test(NAME tst_polygonmanager COMMAND tst_polygonmanager)
+set_tests_properties(tst_polygonmanager PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
 )
 
@@ -73,6 +96,8 @@ add_executable(tst_gui tst_gui.cpp
     ${CMAKE_SOURCE_DIR}/annotationmanager.cpp
     ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
     ${CMAKE_SOURCE_DIR}/testrunner.cpp
 )
