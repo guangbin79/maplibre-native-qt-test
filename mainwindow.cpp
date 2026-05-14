@@ -363,6 +363,69 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->clearAnnotations();
     });
 
+    // ── 纯文字标注演示 ──
+    // 不带图标的纯文字标注，展示文字标注效果
+    auto *btnTextAnn = new QPushButton(QStringLiteral("文字标注"), m_controlPanel);
+    btnTextAnn->setStyleSheet(QStringLiteral("QPushButton { background-color: #E91E63; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnTextAnn);
+    connect(btnTextAnn, &QPushButton::clicked, this, [this]() {
+        QVector<MapAnnotation> anns;
+
+        MapAnnotation a1;
+        a1.id = "text-ann-en";
+        a1.latitude = 36.7538;
+        a1.longitude = 3.0588;
+        a1.title = QStringLiteral("Algiers");
+        a1.iconName = "";
+        anns.append(a1);
+
+        MapAnnotation a2;
+        a2.id = "text-ann-fr";
+        a2.latitude = 36.76;
+        a2.longitude = 3.07;
+        a2.title = QStringLiteral("Bonjour");
+        a2.iconName = "";
+        anns.append(a2);
+
+        MapAnnotation a3;
+        a3.id = "text-ann-ar";
+        a3.latitude = 36.745;
+        a3.longitude = 3.05;
+        a3.title = QStringLiteral("مرحبا");
+        a3.iconName = "";
+        anns.append(a3);
+
+        MapAnnotation a4;
+        a4.id = "text-ann-fa";
+        a4.latitude = 36.735;
+        a4.longitude = 3.065;
+        a4.title = QStringLiteral("سلام");
+        a4.iconName = "";
+        anns.append(a4);
+
+        MapAnnotation a5;
+        a5.id = "text-ann-ru";
+        a5.latitude = 36.755;
+        a5.longitude = 3.075;
+        a5.title = QStringLiteral("Привет");
+        a5.iconName = "";
+        anns.append(a5);
+
+        MapAnnotation a6;
+        a6.id = "text-ann-zh";
+        a6.latitude = 36.765;
+        a6.longitude = 3.055;
+        a6.title = QStringLiteral("你好");
+        a6.iconName = "";
+        anns.append(a6);
+
+        m_mapContainer->setAnnotations(anns);
+
+        // 缩放到标注区域
+        m_mapContainer->setCenter(36.756, 3.064);
+        m_mapContainer->setZoom(14.0);
+    });
+
     // ── 线路 API 演示 ──
     // setRoutes(QVector<MapRouteSegment>) - 批量添加线路
     //   每条线路包含：id, routeId, coordinates, color, width, dashed
@@ -1054,6 +1117,40 @@ MainWindow::MainWindow(QWidget *parent)
             m_mapContainer->showLocation();
         else
             m_mapContainer->hideLocation();
+    });
+
+    connect(m_mapContainer, &MapContainer::mapReady, this, [this]() {
+        QTimer::singleShot(2000, this, [this]() {
+            qDebug() << "[AUTO-ANN] Starting auto annotation test...";
+
+            QVector<MapAnnotation> anns;
+            MapAnnotation a;
+            a.id = "auto-test-fr";
+            a.latitude = 36.7538;
+            a.longitude = 3.0588;
+            a.title = QStringLiteral("Alger - Capitale");
+            a.iconName = "red-marker";
+            anns.append(a);
+
+            qDebug() << "[AUTO-ANN] Calling setAnnotations...";
+            m_mapContainer->setAnnotations(anns);
+
+            qDebug() << "[AUTO-ANN] Calling registerAnnotationIcons...";
+            QMap<QString, QImage> icons;
+            QImage marker(32, 32, QImage::Format_ARGB32);
+            marker.fill(Qt::red);
+            icons["red-marker"] = marker;
+            m_mapContainer->registerAnnotationIcons(icons);
+
+            qDebug() << "[AUTO-ANN] Calling rebuildSource by re-setting annotations...";
+            m_mapContainer->setAnnotations(anns);
+
+            qDebug() << "[AUTO-ANN] Setting center and zoom...";
+            m_mapContainer->setCenter(36.7538, 3.0588);
+            m_mapContainer->setZoom(14.0);
+
+            qDebug() << "[AUTO-ANN] Done! Annotation should be visible now.";
+        });
     });
 }
 

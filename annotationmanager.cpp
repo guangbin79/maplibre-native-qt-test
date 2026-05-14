@@ -156,6 +156,7 @@ void AnnotationManager::ensureLayerSetup()
     m_map->setLayoutProperty("annotations-layer", "icon-image", "{icon}");
     m_map->setLayoutProperty("annotations-layer", "icon-size", 1.0);
     m_map->setLayoutProperty("annotations-layer", "icon-anchor", "bottom");
+    m_map->setLayoutProperty("annotations-layer", "icon-optional", true);
     m_map->setLayoutProperty("annotations-layer", "text-field", "{title}");
     m_map->setLayoutProperty("annotations-layer", "text-font", QStringList{"NotoSans-Regular"});
     m_map->setLayoutProperty("annotations-layer", "text-size", 12);

@@ -135,3 +135,24 @@ add_test(NAME tst_gui COMMAND tst_gui)
 set_tests_properties(tst_gui PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
 )
+
+# Screenshot test for annotation icons
+add_executable(tst_annotation_screenshot tst_annotation_screenshot.cpp
+    ${CMAKE_SOURCE_DIR}/mapcontainer.cpp
+    ${CMAKE_SOURCE_DIR}/annotationmanager.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
+    ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/scalebarwidget.cpp
+    ${CMAKE_SOURCE_DIR}/hxgisserver.cpp
+)
+target_include_directories(tst_annotation_screenshot PRIVATE ${CMAKE_SOURCE_DIR} ${HXGISSERVER_INCLUDE_DIR})
+target_link_directories(tst_annotation_screenshot PRIVATE ${HXGISSERVER_DIR})
+target_link_libraries(tst_annotation_screenshot PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets
+    QMapLibre::Widgets QMapLibre::Core
+    plugin-HXGISServer
+)

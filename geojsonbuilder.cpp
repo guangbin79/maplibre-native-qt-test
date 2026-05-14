@@ -21,7 +21,9 @@ QByteArray GeoJsonBuilder::buildFeatureCollection(const QVector<MapAnnotation>& 
         QJsonObject properties;
         properties["id"] = ann.id;
         properties["title"] = ann.title;
-        properties["icon"] = ann.iconName;
+        if (!ann.iconName.isEmpty()) {
+            properties["icon"] = ann.iconName;
+        }
 
         QJsonObject feature;
         feature["type"] = "Feature";
