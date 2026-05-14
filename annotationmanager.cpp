@@ -48,12 +48,6 @@ void AnnotationManager::clearAnnotations()
         m_layerSetup = false;
     }
 
-    for (auto it = m_iconRefCount.begin(); it != m_iconRefCount.end(); ++it) {
-        if (m_map)
-            m_map->removeImage(it.key());
-    }
-    m_iconRefCount.clear();
-    m_icons.clear();
     m_annotations.clear();
     m_visibleIds.clear();
 }
