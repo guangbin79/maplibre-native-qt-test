@@ -65,7 +65,7 @@ GET /gisserver/tianmu/{z}/{x}/{y}/{version}/{data}
 | x | 列号（整数） |
 | y | 行号（整数） |
 | version | 版本标识（字符串） |
-| data | 数据路径（相对于 `HX_GIS_MAP_PATH`，可含子目录和文件名，如 `dir/Imagedb/1`） |
+| data | 数据路径（相对于 `HX_GIS_DATA_PATH`，可含子目录和文件名，如 `dir/Imagedb/1`） |
 
 **正则**: `^/gisserver/tianmu/*/*/*/*/*.*`
 
@@ -91,7 +91,7 @@ GET /gisserver/geopackage/{z}/{x}/{y}/{version}/{data}
 | x | 查询参数2（整数，除以 10000 后作为纬度） |
 | y | 查询参数3（整数，除以 10000 后作为经度） |
 | version | 查询参数4（整数，除以 10000 后作为纬度） |
-| data | GeoPackage 文件路径（相对于 `HX_GIS_MAP_PATH`） |
+| data | GeoPackage 文件路径（相对于 `HX_GIS_DATA_PATH`） |
 
 > **注意**: 源码注释为 `minX/minY/maxX/maxY`，但变量名实际为 z/x/y/version。
 > 四个参数均除以 10000.0 后传入 `QueryFeaturesByRect(db_path, z/10000, x/10000, y/10000, version/10000)`。
@@ -118,7 +118,7 @@ GET /gisserver/bundle/{z}/{x}/{y}/{version}/{data}
 | x | 列号（整数） |
 | y | 行号（整数） |
 | version | 版本号（整数） |
-| data | 数据路径（相对于 `HX_GIS_MAP_PATH`） |
+| data | 数据路径（相对于 `HX_GIS_DATA_PATH`） |
 
 **正则**: `^/gisserver/bundle/*/*/*/*/*.*`
 
@@ -141,7 +141,7 @@ GET /gisserver/mbtiles/metadata/{data}
 
 | 段 | 说明 |
 |----|------|
-| data | MBTiles 文件路径（相对于 `HX_GIS_MAP_PATH`，必须以 `.mbtiles` 结尾） |
+| data | MBTiles 文件路径（相对于 `HX_GIS_DATA_PATH`，必须以 `.mbtiles` 结尾） |
 
 **正则**: `^/gisserver/mbtiles/metadata/*.*`
 
@@ -171,7 +171,7 @@ GET /gisserver/mbtiles/{z}/{x}/{y}/{data}
 | z | 缩放级别（整数） |
 | x | 列号（TMS 坐标系，整数） |
 | y | 行号（TMS 坐标系，整数） |
-| data | 数据路径（相对于 `HX_GIS_MAP_PATH`，可含子目录） |
+| data | 数据路径（相对于 `HX_GIS_DATA_PATH`，可含子目录） |
 
 **正则**: `^/gisserver/mbtiles/*/*/*/*.*`
 
@@ -396,7 +396,7 @@ GET /data/style.json?schema=hxmap
 
 ## 静态文件服务
 
-以上路由均未匹配时，以 `HX_GIS_MAP_PATH` 为根目录提供静态文件服务（`mg_http_serve_dir`）。
+以上路由均未匹配时，以 `HX_GIS_DATA_PATH` 为根目录提供静态文件服务（`mg_http_serve_dir`）。
 
 支持自动内容类型检测:
 - `image/png`（魔数 `0x89 0x50`）

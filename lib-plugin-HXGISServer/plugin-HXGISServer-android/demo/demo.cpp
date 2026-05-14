@@ -54,22 +54,22 @@ static void test_plugin_api(const char *url, const char *root_path, const char *
 
 #ifdef WIN32
     _putenv_s("HX_GIS_SERVER_URL", url);
-    _putenv_s("HX_GIS_MAP_PATH", root_path);
+    _putenv_s("HX_GIS_DATA_PATH", root_path);
     if (cache_path) {
-        _putenv_s("HX_GIS_MAP_CACHE_PATH", cache_path);
+        _putenv_s("HX_GIS_CACHE_PATH", cache_path);
     } else {
-        _putenv_s("HX_GIS_MAP_CACHE_PATH", "");
+        _putenv_s("HX_GIS_CACHE_PATH", "");
     }
-    _putenv_s("HX_NAVI_LOG_PATH", data_path);
+    _putenv_s("HX_LOG_PATH", data_path);
 #else
     setenv("HX_GIS_SERVER_URL", url, 1);
-    setenv("HX_GIS_MAP_PATH", root_path, 1);
+    setenv("HX_GIS_DATA_PATH", root_path, 1);
     if (cache_path) {
-        setenv("HX_GIS_MAP_CACHE_PATH", cache_path, 1);
+        setenv("HX_GIS_CACHE_PATH", cache_path, 1);
     } else {
-        unsetenv("HX_GIS_MAP_CACHE_PATH");
+        unsetenv("HX_GIS_CACHE_PATH");
     }
-    setenv("HX_NAVI_LOG_PATH", data_path, 1);
+    setenv("HX_LOG_PATH", data_path, 1);
 #endif
 
     const char *ver = plugin_HXGISServer_version();
@@ -78,14 +78,23 @@ static void test_plugin_api(const char *url, const char *root_path, const char *
     void *plugin = hx_plugin_create(plugin_path, data_path);
     if (!plugin) {
         std::cerr << "[错误] hx_plugin_create 返回 nullptr"
-                  << " (HX_GIS_SERVER_URL 或 HX_GIS_MAP_PATH 未设置)" << std::endl;
+                  << " (HX_GIS_SERVER_URL 或 HX_GIS_DATA_PATH 未设置)" << std::endl;
         return;
     }
     std::cout << "[创建] 成功, plugin=" << plugin << std::endl;
 
     int size = 0;
-    void *result = hx_plugin_do(plugin, "test_command", &size);
-    std::cout << "[do] command=\"test_command\" result=" << result
+    hx_request_t req{};
+    req.base_name = "HXGISServer";
+    req.name_len  = static_cast<int>(strlen(req.base_name));
+    req.func_name = "test";
+    req.func_len  = static_cast<int>(strlen(req.func_name));
+    req.json_body = R"({"key":"value"})";
+    req.json_len  = static_cast<int>(strlen(req.json_body));
+    void *result = hx_plugin_do(plugin, &req, &size);
+    std::cout << "[do] base_name=\"" << req.base_name
+              << "\" func_name=\"" << req.func_name
+              << "\" result=" << result
               << " size=" << size << " (接口未实现，预期 nullptr)" << std::endl;
 
     std::cout << std::endl;
@@ -101,7 +110,7 @@ using fn_version_t        = const char *(*)();
 using fn_create_t         = plugin_HXGISServer *(*)(const char *, const char *, const char *);
 using fn_destroy_t        = void (*)(plugin_HXGISServer *);
 using fn_plugin_create_t  = void *(*)(const char *, const char *);
-using fn_plugin_do_t      = void *(*)(void *, const char *, int *);
+using fn_plugin_do_t      = void *(*)(void *, const hx_request_t *, int *);
 using fn_plugin_destroy_t = void (*)(void *);
 
 static void test_dlopen(const char *so_path, const char *url, const char *root_path,
