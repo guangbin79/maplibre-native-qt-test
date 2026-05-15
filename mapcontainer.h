@@ -261,6 +261,40 @@ public:
     void setCenter(double lat, double lon);
 
     /**
+     * @brief 将经纬度坐标转换为屏幕像素坐标
+     *
+     * 将指定的经纬度坐标转换为当前地图视口中的屏幕像素坐标。
+     * 使用 MapLibre 的 Web Mercator 投影进行转换。
+     *
+     * @param lat 纬度，范围 [-90, 90]
+     * @param lon 经度，范围 [-180, 180]
+     * @return 屏幕像素坐标，QPointF 中的 x 为水平像素，y 为垂直像素
+     *
+     * @note 坐标顺序是 (lat, lon)，与常见的 (lon, lat) GeoJSON 顺序不同
+     *
+     * @code
+     * QPointF pixel = container->coordinateToScreen(39.9042, 116.4074);
+     * qDebug() << "屏幕坐标:" << pixel;
+     * @endcode
+     */
+    QPointF coordinateToScreen(double lat, double lon) const;
+
+    /**
+     * @brief 将屏幕像素坐标转换为经纬度坐标
+     *
+     * 将当前地图视口中的屏幕像素坐标转换为经纬度坐标。
+     *
+     * @param pixel 屏幕像素坐标
+     * @return 经纬度坐标，QMapLibre::Coordinate (latitude, longitude)
+     *
+     * @code
+     * QMapLibre::Coordinate coord = container->screenToCoordinate(QPointF(400, 300));
+     * qDebug() << "纬度:" << coord.first << "经度:" << coord.second;
+     * @endcode
+     */
+    QMapLibre::Coordinate screenToCoordinate(const QPointF &pixel) const;
+
+    /**
      * @brief 设置地图缩放级别
      *
      * 控制地图的显示比例。缩放级别是指数级的，每增加 1 级，
@@ -1086,6 +1120,26 @@ signals:
      * @see setCenter(), zoomChanged()
      */
     void centerChanged(double lat, double lon);
+
+    /**
+     * @brief 地图点击信号
+     *
+     * 当用户单击地图时发出，携带点击位置的经纬度坐标和屏幕像素坐标。
+     * 仅在鼠标左键单击时触发，不影响双指缩放和旋转等手势操作。
+     *
+     * @param lat 点击位置的纬度，范围 [-90, 90]
+     * @param lon 点击位置的经度，范围 [-180, 180]
+     * @param screenPos 点击位置的屏幕像素坐标
+     *
+     * @code
+     * connect(container, &MapContainer::mapClicked,
+     *         [](double lat, double lon, QPointF screenPos) {
+     *     qDebug() << "点击坐标: lat=" << lat << "lon=" << lon
+     *              << "screen=" << screenPos;
+     * });
+     * @endcode
+     */
+    void mapClicked(double lat, double lon, QPointF screenPos);
 
     /**
      * @brief 相机动画完成信号

@@ -111,6 +111,16 @@ void MapContainer::setCenter(double lat, double lon) {
     m_glWidget->map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
 }
 
+QPointF MapContainer::coordinateToScreen(double lat, double lon) const
+{
+    return map()->pixelForCoordinate(QMapLibre::Coordinate(lat, lon));
+}
+
+QMapLibre::Coordinate MapContainer::screenToCoordinate(const QPointF &pixel) const
+{
+    return map()->coordinateForPixel(pixel);
+}
+
 void MapContainer::setZoom(double zoom) {
     m_glWidget->map()->setZoom(qBound(0.0, zoom, MAX_ZOOM));
 }
@@ -152,14 +162,21 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
                 && m_locationIndicatorManager->isLocationVisible();
             switch (event->type()) {
-            case QEvent::MouseButtonPress:
+            case QEvent::MouseButtonPress: {
                 if (isFixedAllowed) {
                     m_fixedResumeTimer->stop();
                     m_fixedPausedByTouch = true;
                     m_locationIndicatorManager->setFollowingPaused(true);
                     m_followTimer->stop();
                 }
+                auto *mouseEvent = static_cast<QMouseEvent *>(event);
+                if (mouseEvent->button() == Qt::LeftButton) {
+                    QPointF screenPos = mouseEvent->position();
+                    QMapLibre::Coordinate coord = map()->coordinateForPixel(screenPos);
+                    emit mapClicked(coord.first, coord.second, screenPos);
+                }
                 break;
+            }
             case QEvent::MouseButtonRelease:
                 if (isFixedAllowed && m_fixedPausedByTouch) {
                     m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
