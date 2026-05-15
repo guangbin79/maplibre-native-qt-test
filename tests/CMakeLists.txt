@@ -156,3 +156,28 @@ target_link_libraries(tst_annotation_screenshot PRIVATE
     QMapLibre::Widgets QMapLibre::Core
     plugin-HXGISServer
 )
+
+# tst_coordinateconversion - coordinate conversion unit test
+add_executable(tst_coordinateconversion tst_coordinateconversion.cpp
+    ${CMAKE_SOURCE_DIR}/mapcontainer.cpp
+    ${CMAKE_SOURCE_DIR}/annotationmanager.cpp
+    ${CMAKE_SOURCE_DIR}/geojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
+    ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
+    ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/scalebarwidget.cpp
+    ${CMAKE_SOURCE_DIR}/hxgisserver.cpp
+)
+target_include_directories(tst_coordinateconversion PRIVATE ${CMAKE_SOURCE_DIR} ${HXGISSERVER_INCLUDE_DIR})
+target_link_directories(tst_coordinateconversion PRIVATE ${HXGISSERVER_DIR})
+target_link_libraries(tst_coordinateconversion PRIVATE
+    Qt6::Test Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets
+    QMapLibre::Widgets QMapLibre::Core
+    plugin-HXGISServer
+)
+add_test(NAME tst_coordinateconversion COMMAND tst_coordinateconversion)
+set_tests_properties(tst_coordinateconversion PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=/home/guangbin/Qt/6.6.3/gcc_64/lib:$ENV{LD_LIBRARY_PATH}"
+)
