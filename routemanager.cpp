@@ -160,7 +160,7 @@ void RouteManager::ensureLayerSetup() {
     m_map->addLayer("routes-labels", QVariantMap{{"type", "symbol"}, {"source", "routes"}});
     m_map->setLayoutProperty("routes-labels", "symbol-placement", "line-center");
     m_map->setLayoutProperty("routes-labels", "text-field", "{title}");
-    m_map->setLayoutProperty("routes-labels", "text-font", QStringList{"Roboto Regular"});
+    m_map->setLayoutProperty("routes-labels", "text-font", QStringList{"NotoSans-Regular", "NotoSansSC-Regular", "NotoSansArabic-Regular"});
     m_map->setLayoutProperty("routes-labels", "text-size", 12);
     m_map->setLayoutProperty("routes-labels", "text-anchor", "center");
     m_map->setLayoutProperty("routes-labels", "filter",
