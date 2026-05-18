@@ -426,6 +426,27 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setZoom(14.0);
     });
 
+    // ── 阿尔及利亚多语言标注演示 ──
+    // 一个标注同时包含英文、中文、法文、俄文，验证多语种混合字体渲染
+    auto *btnAlgeriaMultilang = new QPushButton(QStringLiteral("阿尔及利亚多语言"), m_controlPanel);
+    btnAlgeriaMultilang->setStyleSheet(QStringLiteral("QPushButton { background-color: #00BCD4; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnAlgeriaMultilang);
+    connect(btnAlgeriaMultilang, &QPushButton::clicked, this, [this]() {
+        QVector<MapAnnotation> anns;
+
+        MapAnnotation a;
+        a.id = "multilang-algiers";
+        a.latitude = 36.7538;
+        a.longitude = 3.0588;
+        a.title = QStringLiteral("Algiers / 阿尔及尔 / Alger / Алжир");
+        a.iconName = "";
+        anns.append(a);
+
+        m_mapContainer->setAnnotations(anns);
+        m_mapContainer->setCenter(36.7538, 3.0588);
+        m_mapContainer->setZoom(12.0);
+    });
+
     // ── 线路 API 演示 ──
     // setRoutes(QVector<MapRouteSegment>) - 批量添加线路
     //   每条线路包含：id, routeId, coordinates, color, width, dashed
