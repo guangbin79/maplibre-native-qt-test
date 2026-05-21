@@ -43,6 +43,7 @@ private slots:
     void testPolygonFocus();
     void testGeoJsonExport();
     void testGeoJsonImport();
+    void testLayerZOrder();
 
 private:
     MainWindow *m_window = nullptr;
@@ -793,6 +794,115 @@ void GuiTest::testGeoJsonImport() {
     m_map->clearPolygons();
     QTest::qWait(500);
     captureScreenshot("32_import_cleanup");
+}
+
+void GuiTest::testLayerZOrder()
+{
+    log("testLayerZOrder: verifying layer z-order is deterministic");
+
+    // Helper: find index of a layer ID in the layer list
+    auto layerIndex = [](const QVector<QString>& layers, const QString& id) -> int {
+        for (int i = 0; i < layers.size(); ++i) {
+            if (layers[i] == id) return i;
+        }
+        return -1;
+    };
+
+    // Clear all data first
+    m_map->clearAnnotations();
+    m_map->clearRoutes();
+    m_map->clearPolygons();
+    QTest::qWait(500);
+
+    // === Scenario 1: Load annotations first, then routes, then polygons ===
+    // This is the problematic order that previously caused routes to cover annotations
+
+    // Add annotations first
+    QVector<MapAnnotation> anns;
+    MapAnnotation ann;
+    ann.id = "ztest-ann-1";
+    ann.title = "Test Annotation";
+    ann.latitude = 39.9142;
+    ann.longitude = 116.4074;
+    ann.iconName = "default-marker";
+    anns.append(ann);
+    m_map->setAnnotations(anns);
+    QTest::qWait(500);
+
+    // Add routes second (these should NOT cover annotations)
+    QVector<MapRouteSegment> segs;
+    MapRouteSegment seg;
+    seg.id = "ztest-seg-1";
+    seg.routeId = "ztest-route";
+    seg.coordinates = {{39.9042, 116.3974}, {39.9242, 116.4174}};
+    seg.color = QColor(255, 0, 0);
+    seg.width = 4.0;
+    seg.dashed = false;
+    segs.append(seg);
+    m_map->setRoutes(segs);
+    QTest::qWait(500);
+
+    // Add polygons third
+    QVector<MapPolygon> polys;
+    MapPolygon poly;
+    poly.id = "ztest-poly-1";
+    poly.polygonId = "ztest-poly";
+    poly.coordinates = {{39.9042, 116.3974}, {39.9242, 116.4174}, {39.9142, 116.4274}, {39.9042, 116.3974}};
+    poly.fillEnabled = true;
+    poly.fillColor = QColor(0, 0, 255, 100);
+    poly.strokeColor = QColor(0, 0, 255);
+    poly.strokeWidth = 2.0;
+    polys.append(poly);
+    m_map->setPolygons(polys);
+    QTest::qWait(1000);
+
+    captureScreenshot("33_zorder_annotations_first");
+
+    // Verify layer order: all polygon layers < all route layers < annotations-layer
+    QVector<QString> layers = m_map->map()->layerIds();
+
+    int polygonsFillIdx = layerIndex(layers, "polygons-fill");
+    int routesSolidIdx = layerIndex(layers, "routes-solid");
+    int annotationsIdx = layerIndex(layers, "annotations-layer");
+
+    log(QStringLiteral("Layer order check: polygons-fill=%1, routes-solid=%2, annotations-layer=%3, total=%4")
+        .arg(polygonsFillIdx).arg(routesSolidIdx).arg(annotationsIdx).arg(layers.size()));
+
+    QVERIFY2(polygonsFillIdx >= 0, "polygons-fill layer should exist");
+    QVERIFY2(routesSolidIdx >= 0, "routes-solid layer should exist");
+    QVERIFY2(annotationsIdx >= 0, "annotations-layer should exist");
+
+    QVERIFY2(polygonsFillIdx < routesSolidIdx,
+        QStringLiteral("polygons-fill (%1) should be below routes-solid (%2)").arg(polygonsFillIdx).arg(routesSolidIdx).toUtf8());
+    QVERIFY2(routesSolidIdx < annotationsIdx,
+        QStringLiteral("routes-solid (%1) should be below annotations-layer (%2)").arg(routesSolidIdx).arg(annotationsIdx).toUtf8());
+
+    // === Scenario 2: clearRoutes + setRoutes should preserve order ===
+    m_map->clearRoutes();
+    QTest::qWait(500);
+    m_map->setRoutes(segs);
+    QTest::qWait(1000);
+
+    captureScreenshot("34_zorder_after_clear_re_set");
+
+    QVector<QString> layers2 = m_map->map()->layerIds();
+    int polygonsFillIdx2 = layerIndex(layers2, "polygons-fill");
+    int routesSolidIdx2 = layerIndex(layers2, "routes-solid");
+    int annotationsIdx2 = layerIndex(layers2, "annotations-layer");
+
+    log(QStringLiteral("After clear+re-set: polygons-fill=%1, routes-solid=%2, annotations-layer=%3")
+        .arg(polygonsFillIdx2).arg(routesSolidIdx2).arg(annotationsIdx2));
+
+    QVERIFY2(polygonsFillIdx2 >= 0, "polygons-fill layer should still exist after route clear+re-set");
+    QVERIFY2(routesSolidIdx2 >= 0, "routes-solid layer should exist after re-set");
+    QVERIFY2(annotationsIdx2 >= 0, "annotations-layer should still exist after route clear+re-set");
+
+    QVERIFY2(polygonsFillIdx2 < routesSolidIdx2,
+        QStringLiteral("After clear+re-set: polygons-fill (%1) should be below routes-solid (%2)").arg(polygonsFillIdx2).arg(routesSolidIdx2).toUtf8());
+    QVERIFY2(routesSolidIdx2 < annotationsIdx2,
+        QStringLiteral("After clear+re-set: routes-solid (%1) should be below annotations-layer (%2)").arg(routesSolidIdx2).arg(annotationsIdx2).toUtf8());
+
+    log("testLayerZOrder: PASSED - layer z-order is deterministic");
 }
 
 QTEST_MAIN(GuiTest)
