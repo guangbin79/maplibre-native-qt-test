@@ -5,7 +5,12 @@
 PolygonManager::PolygonManager(QMapLibre::Map* map, QObject* parent)
     : QObject(parent), m_map(map) {}
 
-void PolygonManager::setMapReady(bool ready) { m_ready = ready; }
+void PolygonManager::setMapReady(bool ready)
+{
+    m_ready = ready;
+    if (!ready)
+        m_layerSetup = false;
+}
 
 QStringList PolygonManager::allPolygonIds() const {
     QStringList ids;
@@ -139,15 +144,28 @@ void PolygonManager::ensureLayerSetup() {
 
     m_map->addSource("polygons", QVariantMap{{"type", "geojson"}, {"data", geojson}});
 
+    // Determine before target for correct z-order (polygons should be below routes/annotations/location)
+    QString before;
+    if (m_map) {
+        const QVector<QString> existing = m_map->layerIds();
+        const QStringList candidates = {"routes-solid", "annotations-layer", "location-indicator-layer"};
+        for (const auto& c : candidates) {
+            if (existing.contains(c)) {
+                before = c;
+                break;
+            }
+        }
+    }
+
     // Fill layer
-    m_map->addLayer("polygons-fill", QVariantMap{{"type", "fill"}, {"source", "polygons"}});
+    m_map->addLayer("polygons-fill", QVariantMap{{"type", "fill"}, {"source", "polygons"}}, before);
     m_map->setPaintProperty("polygons-fill", "fill-color", QVariantList{"get", "fillColor"});
     m_map->setPaintProperty("polygons-fill", "fill-opacity", QVariantList{"get", "fillOpacity"});
     m_map->setLayoutProperty("polygons-fill", "filter",
         QVariantList{"==", QVariantList{"get", "geometryType"}, "fill"});
 
     // Solid stroke layer
-    m_map->addLayer("polygons-stroke-solid", QVariantMap{{"type", "line"}, {"source", "polygons"}});
+    m_map->addLayer("polygons-stroke-solid", QVariantMap{{"type", "line"}, {"source", "polygons"}}, before);
     m_map->setLayoutProperty("polygons-stroke-solid", "line-cap", "round");
     m_map->setLayoutProperty("polygons-stroke-solid", "line-join", "round");
     m_map->setPaintProperty("polygons-stroke-solid", "line-color", QVariantList{"get", "strokeColor"});
@@ -157,7 +175,7 @@ void PolygonManager::ensureLayerSetup() {
                      QVariantList{"==", QVariantList{"get", "strokeType"}, "solid"}});
 
     // Dashed stroke layer
-    m_map->addLayer("polygons-stroke-dashed", QVariantMap{{"type", "line"}, {"source", "polygons"}});
+    m_map->addLayer("polygons-stroke-dashed", QVariantMap{{"type", "line"}, {"source", "polygons"}}, before);
     m_map->setLayoutProperty("polygons-stroke-dashed", "line-cap", "round");
     m_map->setLayoutProperty("polygons-stroke-dashed", "line-join", "round");
     m_map->setPaintProperty("polygons-stroke-dashed", "line-color", QVariantList{"get", "strokeColor"});
@@ -168,7 +186,7 @@ void PolygonManager::ensureLayerSetup() {
                      QVariantList{"==", QVariantList{"get", "strokeType"}, "dashed"}});
 
     // Label layer
-    m_map->addLayer("polygons-labels", QVariantMap{{"type", "symbol"}, {"source", "polygons"}});
+    m_map->addLayer("polygons-labels", QVariantMap{{"type", "symbol"}, {"source", "polygons"}}, before);
     m_map->setLayoutProperty("polygons-labels", "symbol-placement", "point");
     m_map->setLayoutProperty("polygons-labels", "text-field", "{title}");
     m_map->setLayoutProperty("polygons-labels", "text-size", 12);

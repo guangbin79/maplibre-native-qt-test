@@ -5,7 +5,12 @@
 RouteManager::RouteManager(QMapLibre::Map* map, QObject* parent)
     : QObject(parent), m_map(map) {}
 
-void RouteManager::setMapReady(bool ready) { m_ready = ready; }
+void RouteManager::setMapReady(bool ready)
+{
+    m_ready = ready;
+    if (!ready)
+        m_layerSetup = false;
+}
 
 QStringList RouteManager::allRouteIds() const {
     QStringList ids;
@@ -138,9 +143,22 @@ void RouteManager::ensureLayerSetup() {
 
     QByteArray geojson = RouteGeoJsonBuilder::buildFeatureCollection(m_segments);
 
+    // Determine before target for correct z-order (routes should be below annotations/location)
+    QString before;
+    if (m_map) {
+        const QVector<QString> existing = m_map->layerIds();
+        const QStringList candidates = {"annotations-layer", "location-indicator-layer"};
+        for (const auto& c : candidates) {
+            if (existing.contains(c)) {
+                before = c;
+                break;
+            }
+        }
+    }
+
     m_map->addSource("routes", QVariantMap{{"type", "geojson"}, {"data", geojson}});
 
-    m_map->addLayer("routes-solid", QVariantMap{{"type", "line"}, {"source", "routes"}});
+    m_map->addLayer("routes-solid", QVariantMap{{"type", "line"}, {"source", "routes"}}, before);
     m_map->setLayoutProperty("routes-solid", "line-cap", "round");
     m_map->setLayoutProperty("routes-solid", "line-join", "round");
     m_map->setPaintProperty("routes-solid", "line-color", QVariantList{"get", "color"});
@@ -148,7 +166,7 @@ void RouteManager::ensureLayerSetup() {
     m_map->setLayoutProperty("routes-solid", "filter",
         QVariantList{"==", QVariantList{"get", "lineType"}, "solid"});
 
-    m_map->addLayer("routes-dashed", QVariantMap{{"type", "line"}, {"source", "routes"}});
+    m_map->addLayer("routes-dashed", QVariantMap{{"type", "line"}, {"source", "routes"}}, before);
     m_map->setLayoutProperty("routes-dashed", "line-cap", "round");
     m_map->setLayoutProperty("routes-dashed", "line-join", "round");
     m_map->setPaintProperty("routes-dashed", "line-color", QVariantList{"get", "color"});
@@ -157,7 +175,7 @@ void RouteManager::ensureLayerSetup() {
     m_map->setLayoutProperty("routes-dashed", "filter",
         QVariantList{"==", QVariantList{"get", "lineType"}, "dashed"});
 
-    m_map->addLayer("routes-labels", QVariantMap{{"type", "symbol"}, {"source", "routes"}});
+    m_map->addLayer("routes-labels", QVariantMap{{"type", "symbol"}, {"source", "routes"}}, before);
     m_map->setLayoutProperty("routes-labels", "symbol-placement", "line-center");
     m_map->setLayoutProperty("routes-labels", "text-field", "{title}");
     m_map->setLayoutProperty("routes-labels", "text-font", QStringList{"NotoSans-Regular", "NotoSansSC-Regular", "NotoSansArabic-Regular"});

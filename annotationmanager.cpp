@@ -17,6 +17,8 @@ AnnotationManager::AnnotationManager(QMapLibre::Map* map, QObject* parent)
 void AnnotationManager::setMapReady(bool ready)
 {
     m_ready = ready;
+    if (!ready)
+        m_layerSetup = false;
 }
 
 void AnnotationManager::setAnnotations(const QVector<MapAnnotation>& annotations)
@@ -141,6 +143,14 @@ void AnnotationManager::ensureLayerSetup()
     if (!m_ready || !m_map)
         return;
 
+    // Determine before target for correct z-order (annotations should be below location indicator)
+    QString before;
+    if (m_map) {
+        const QVector<QString> existing = m_map->layerIds();
+        if (existing.contains("location-indicator-layer"))
+            before = "location-indicator-layer";
+    }
+
     QByteArray geojson = GeoJsonBuilder::buildFeatureCollection(m_annotations);
     m_map->addSource("annotations", QVariantMap{
         {"type", "geojson"},
@@ -151,7 +161,7 @@ void AnnotationManager::ensureLayerSetup()
         {"id", "annotations-layer"},
         {"type", "symbol"},
         {"source", "annotations"}
-    });
+    }, before);
 
     m_map->setLayoutProperty("annotations-layer", "icon-image", "{icon}");
     m_map->setLayoutProperty("annotations-layer", "icon-size", 1.0);
