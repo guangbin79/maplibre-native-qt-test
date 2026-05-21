@@ -60,6 +60,9 @@ QByteArray GeoJsonExporter::buildRoutes(const QVector<MapRouteSegment>& segments
         properties["width"] = seg.width;
         properties["lineType"] = seg.dashed ? "dashed" : "solid";
         properties["title"] = seg.title;
+        properties["showArrows"] = seg.showArrows;
+        properties["arrowSize"] = seg.arrowSize;
+        properties["arrowColor"] = seg.effectiveArrowColor().name();
 
         QJsonObject feature;
         feature["type"] = "Feature";

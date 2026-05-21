@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QVector>
 #include <QStringList>
+#include <QMap>
 #include <QMapLibre/Types>
 #include "maproutesegment.h"
 
@@ -57,9 +58,15 @@ private:
     void rebuildSource();
     void updateFilter();
 
+    void registerArrowIcons();
+    void unregisterArrowIcons();
+
+    static constexpr int ARROW_SPACING = 200;
+
     QMapLibre::Map* m_map;
     QVector<MapRouteSegment> m_segments;
     QStringList m_visibleRouteIds;
+    QMap<QString, int> m_arrowIconRefCount;
     bool m_ready = false;
     bool m_layerSetup = false;
 };

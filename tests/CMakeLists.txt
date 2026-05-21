@@ -50,7 +50,7 @@ target_link_libraries(tst_polygongeojsonbuilder PRIVATE Qt6::Test Qt6::Core Qt6:
 add_test(NAME tst_polygongeojsonbuilder COMMAND tst_polygongeojsonbuilder)
 
 # tst_routemanager
-add_executable(tst_routemanager tst_routemanager.cpp ${CMAKE_SOURCE_DIR}/routemanager.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp)
+add_executable(tst_routemanager tst_routemanager.cpp ${CMAKE_SOURCE_DIR}/routemanager.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp ${CMAKE_SOURCE_DIR}/routearrowicon.cpp)
 target_include_directories(tst_routemanager PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_routemanager PRIVATE Qt6::Test Qt6::Core Qt6::Gui QMapLibre::Core)
 add_test(NAME tst_routemanager COMMAND tst_routemanager)
@@ -116,6 +116,7 @@ add_executable(tst_gui tst_gui.cpp
     ${CMAKE_SOURCE_DIR}/annotationmanager.cpp
     ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/routearrowicon.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
@@ -143,6 +144,7 @@ add_executable(tst_annotation_screenshot tst_annotation_screenshot.cpp
     ${CMAKE_SOURCE_DIR}/geojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/routearrowicon.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
@@ -164,6 +166,7 @@ add_executable(tst_coordinateconversion tst_coordinateconversion.cpp
     ${CMAKE_SOURCE_DIR}/geojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/routemanager.cpp
+    ${CMAKE_SOURCE_DIR}/routearrowicon.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp

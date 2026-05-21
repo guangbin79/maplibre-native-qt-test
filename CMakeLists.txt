@@ -158,6 +158,8 @@ qt_add_executable(appuntitled
     routegeojsonbuilder.cpp
     routemanager.h
     routemanager.cpp
+    routearrowicon.h
+    routearrowicon.cpp
     mappolygon.h
     polygongeojsonbuilder.h
     polygongeojsonbuilder.cpp

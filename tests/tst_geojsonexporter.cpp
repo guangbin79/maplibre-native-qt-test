@@ -104,6 +104,9 @@ void tst_GeoJsonExporter::testRoutes()
     seg1.width = 4.0;
     seg1.dashed = false;
     seg1.title = "线路A";
+    seg1.showArrows = true;
+    seg1.arrowSize = 1.5;
+    seg1.arrowColor = QColor("#FFFFFF");
 
     MapRouteSegment seg2;
     seg2.id = "test-seg-002";
@@ -113,6 +116,9 @@ void tst_GeoJsonExporter::testRoutes()
     seg2.width = 2.0;
     seg2.dashed = true;
     seg2.title = "线路B";
+    seg2.showArrows = false;
+    seg2.arrowSize = 1.0;
+    // arrowColor left invalid → effectiveArrowColor() returns color
 
     QByteArray result = GeoJsonExporter::buildRoutes({seg1, seg2});
 
@@ -153,6 +159,9 @@ void tst_GeoJsonExporter::testRoutes()
         QCOMPARE(props["width"].toDouble(), 4.0);
         QCOMPARE(props["lineType"].toString(), QStringLiteral("solid"));
         QCOMPARE(props["title"].toString(), QStringLiteral("线路A"));
+        QCOMPARE(props["showArrows"].toBool(), true);
+        QCOMPARE(props["arrowSize"].toDouble(), 1.5);
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#ffffff"));
     }
 
     // Second route: dashed
@@ -165,6 +174,9 @@ void tst_GeoJsonExporter::testRoutes()
         QCOMPARE(props["color"].toString(), QStringLiteral("#2196f3"));
         QCOMPARE(props["width"].toDouble(), 2.0);
         QCOMPARE(props["title"].toString(), QStringLiteral("线路B"));
+        QCOMPARE(props["showArrows"].toBool(), false);
+        QCOMPARE(props["arrowSize"].toDouble(), 1.0);
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#2196f3"));
     }
 }
 

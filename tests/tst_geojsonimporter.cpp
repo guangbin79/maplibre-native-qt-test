@@ -10,6 +10,8 @@ class tst_GeoJsonImporter : public QObject {
 private slots:
     void testParseAnnotations();
     void testParseRoutes();
+    void testParseRoutesWithArrows();
+    void testParseRoutesMissingArrows();
     void testParsePolygons();
     void testInvalidJson();
     void testMissingFile();
@@ -70,7 +72,10 @@ void tst_GeoJsonImporter::testParseRoutes()
                     "color": "#ff5722",
                     "width": 4.0,
                     "lineType": "solid",
-                    "title": "线路A"
+                    "title": "线路A",
+                    "showArrows": true,
+                    "arrowSize": 1.5,
+                    "arrowColor": "#ffffff"
                 }
             },
             {
@@ -85,7 +90,10 @@ void tst_GeoJsonImporter::testParseRoutes()
                     "color": "#2196f3",
                     "width": 2.0,
                     "lineType": "dashed",
-                    "title": "线路B"
+                    "title": "线路B",
+                    "showArrows": false,
+                    "arrowSize": 1.0,
+                    "arrowColor": "#2196f3"
                 }
             }
         ]
@@ -103,6 +111,9 @@ void tst_GeoJsonImporter::testParseRoutes()
     QCOMPARE(result[0].width, 4.0);
     QCOMPARE(result[0].dashed, false);
     QCOMPARE(result[0].title, QStringLiteral("线路A"));
+    QCOMPARE(result[0].showArrows, true);
+    QCOMPARE(result[0].arrowSize, 1.5);
+    QCOMPARE(result[0].arrowColor, QColor("#ffffff"));
     QCOMPARE(result[0].coordinates.size(), 3);
     QCOMPARE(result[0].coordinates[0].first, 39.9042);
     QCOMPARE(result[0].coordinates[0].second, 116.4074);
@@ -114,7 +125,79 @@ void tst_GeoJsonImporter::testParseRoutes()
     QCOMPARE(result[1].id, QStringLiteral("seg-002"));
     QCOMPARE(result[1].routeId, QStringLiteral("route-B"));
     QCOMPARE(result[1].dashed, true);
+    QCOMPARE(result[1].showArrows, false);
+    QCOMPARE(result[1].arrowSize, 1.0);
+    QCOMPARE(result[1].arrowColor, QColor("#2196f3"));
     QCOMPARE(result[1].coordinates.size(), 2);
+}
+
+void tst_GeoJsonImporter::testParseRoutesWithArrows()
+{
+    QByteArray geojson = R"({
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[116.4074, 39.9042], [116.3972, 39.9163]]
+                },
+                "properties": {
+                    "id": "seg-arrow",
+                    "routeId": "route-arrow",
+                    "color": "#ff0000",
+                    "width": 3.0,
+                    "lineType": "solid",
+                    "title": "箭头线路",
+                    "showArrows": true,
+                    "arrowSize": 2.0,
+                    "arrowColor": "#00ff00"
+                }
+            }
+        ]
+    })";
+
+    bool ok = false;
+    QVector<MapRouteSegment> result = GeoJsonImporter::parseRoutes(geojson, &ok);
+
+    QVERIFY(ok);
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0].showArrows, true);
+    QCOMPARE(result[0].arrowSize, 2.0);
+    QCOMPARE(result[0].arrowColor, QColor("#00ff00"));
+}
+
+void tst_GeoJsonImporter::testParseRoutesMissingArrows()
+{
+    QByteArray geojson = R"({
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[116.4074, 39.9042], [116.3972, 39.9163]]
+                },
+                "properties": {
+                    "id": "seg-noarrow",
+                    "routeId": "route-noarrow",
+                    "color": "#ff0000",
+                    "width": 3.0,
+                    "lineType": "solid",
+                    "title": "无箭头字段"
+                }
+            }
+        ]
+    })";
+
+    bool ok = false;
+    QVector<MapRouteSegment> result = GeoJsonImporter::parseRoutes(geojson, &ok);
+
+    QVERIFY(ok);
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0].showArrows, false);
+    QCOMPARE(result[0].arrowSize, 1.0);
+    QVERIFY(!result[0].arrowColor.isValid());
 }
 
 void tst_GeoJsonImporter::testParsePolygons()

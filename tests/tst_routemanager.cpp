@@ -17,6 +17,17 @@ private slots:
     void testClearSegments();
     void testMapNotReady();
     void testAllRouteIdsDedup();
+
+    void testArrowSegmentDoesNotCrash();
+    void testArrowSegmentBatchDoesNotCrash();
+    void testNoArrowSegmentNoRefCount();
+    void testArrowRefCountSameColor();
+    void testArrowRefCountDifferentColors();
+    void testRemoveArrowSegmentDecrements();
+    void testRemoveArrowSegmentsBatchDecrements();
+    void testClearSegmentsClearsArrowState();
+    void testHideAllRoutesWithArrows();
+    void testSetSegmentsReplacesArrowState();
 };
 
 static MapRouteSegment makeSegment(const QString& id, const QString& routeId,
@@ -30,6 +41,22 @@ static MapRouteSegment makeSegment(const QString& id, const QString& routeId,
     seg.width = 3.0;
     seg.dashed = dashed;
     seg.title = title;
+    return seg;
+}
+
+static MapRouteSegment makeArrowSegment(const QString& id, const QString& routeId,
+                                         const QColor& color = QColor("#ff0000"),
+                                         const QColor& arrowColor = QColor())
+{
+    MapRouteSegment seg;
+    seg.id = id;
+    seg.routeId = routeId;
+    seg.coordinates = {{39.9, 116.4}, {31.2, 121.5}};
+    seg.color = color;
+    seg.width = 3.0;
+    seg.showArrows = true;
+    seg.arrowSize = 1.0;
+    seg.arrowColor = arrowColor;
     return seg;
 }
 
@@ -206,6 +233,159 @@ void TestRouteManager::testAllRouteIdsDedup()
     QCOMPARE(ids.size(), 2);
     QVERIFY(ids.contains("routeA"));
     QVERIFY(ids.contains("routeB"));
+}
+
+void TestRouteManager::testArrowSegmentDoesNotCrash()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    QCOMPARE(mgr.allRouteIds().size(), 1);
+    QCOMPARE(mgr.segments().size(), 1);
+    QVERIFY(mgr.segments().first().showArrows);
+}
+
+void TestRouteManager::testArrowSegmentBatchDoesNotCrash()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    QVector<MapRouteSegment> segs;
+    segs.append(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    segs.append(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+    segs.append(makeSegment("s3", "routeC", "No arrows"));
+
+    mgr.addRouteSegments(segs);
+    QCOMPARE(mgr.allRouteIds().size(), 3);
+    QCOMPARE(mgr.segments().size(), 3);
+}
+
+void TestRouteManager::testNoArrowSegmentNoRefCount()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeSegment("s1", "routeA", "Route A"));
+    QCOMPARE(mgr.allRouteIds().size(), 1);
+    mgr.removeRouteSegment("s1");
+    QVERIFY(mgr.allRouteIds().isEmpty());
+}
+
+void TestRouteManager::testArrowRefCountSameColor()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.addRouteSegment(makeArrowSegment("s2", "routeA", QColor("#ff0000")));
+
+    QCOMPARE(mgr.segments().size(), 2);
+
+    mgr.removeRouteSegment("s1");
+    QCOMPARE(mgr.segments().size(), 1);
+    QCOMPARE(mgr.segments().first().id, QString("s2"));
+
+    mgr.removeRouteSegment("s2");
+    QVERIFY(mgr.segments().isEmpty());
+}
+
+void TestRouteManager::testArrowRefCountDifferentColors()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.addRouteSegment(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+
+    QCOMPARE(mgr.segments().size(), 2);
+
+    mgr.removeRouteSegment("s1");
+    QCOMPARE(mgr.segments().size(), 1);
+    QCOMPARE(mgr.segments().first().effectiveArrowColor(), QColor("#00ff00"));
+}
+
+void TestRouteManager::testRemoveArrowSegmentDecrements()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.removeRouteSegment("s1");
+    QVERIFY(mgr.allRouteIds().isEmpty());
+}
+
+void TestRouteManager::testRemoveArrowSegmentsBatchDecrements()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    QVector<MapRouteSegment> segs;
+    segs.append(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    segs.append(makeArrowSegment("s2", "routeA", QColor("#ff0000")));
+    segs.append(makeArrowSegment("s3", "routeB", QColor("#0000ff")));
+
+    mgr.setSegments(segs);
+    QCOMPARE(mgr.allRouteIds().size(), 2);
+
+    mgr.removeRouteSegments({"s1", "s2"});
+    QCOMPARE(mgr.segments().size(), 1);
+    QCOMPARE(mgr.segments().first().id, QString("s3"));
+}
+
+void TestRouteManager::testClearSegmentsClearsArrowState()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.addRouteSegment(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+
+    QCOMPARE(mgr.segments().size(), 2);
+
+    mgr.clearSegments();
+    QVERIFY(mgr.segments().isEmpty());
+    QVERIFY(mgr.allRouteIds().isEmpty());
+
+    mgr.addRouteSegment(makeArrowSegment("s3", "routeC", QColor("#ff0000")));
+    QCOMPARE(mgr.segments().size(), 1);
+}
+
+void TestRouteManager::testHideAllRoutesWithArrows()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    QCOMPARE(mgr.visibleRouteIds().size(), 1);
+
+    mgr.hideAllRoutes();
+    QVERIFY(mgr.visibleRouteIds().isEmpty());
+
+    QCOMPARE(mgr.segments().size(), 1);
+    QVERIFY(mgr.segments().first().showArrows);
+
+    mgr.showAllRoutes();
+    QCOMPARE(mgr.visibleRouteIds().size(), 1);
+}
+
+void TestRouteManager::testSetSegmentsReplacesArrowState()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    QCOMPARE(mgr.segments().size(), 1);
+
+    QVector<MapRouteSegment> newSegs;
+    newSegs.append(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+    newSegs.append(makeSegment("s3", "routeC", "No arrows"));
+
+    mgr.setSegments(newSegs);
+    QCOMPARE(mgr.segments().size(), 2);
+    QCOMPARE(mgr.allRouteIds().size(), 2);
+    QVERIFY(mgr.segments().at(0).showArrows);
+    QVERIFY(!mgr.segments().at(1).showArrows);
 }
 
 QTEST_MAIN(TestRouteManager)

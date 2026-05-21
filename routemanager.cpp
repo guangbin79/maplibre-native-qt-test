@@ -1,6 +1,9 @@
 #include "routemanager.h"
 #include "routegeojsonbuilder.h"
+#include "routearrowicon.h"
 #include <QMapLibre/Map>
+#include <QGuiApplication>
+#include <QScreen>
 
 RouteManager::RouteManager(QMapLibre::Map* map, QObject* parent)
     : QObject(parent), m_map(map) {}
@@ -78,6 +81,22 @@ void RouteManager::addRouteSegment(const MapRouteSegment& segment) {
     m_segments.append(segment);
     if (!m_visibleRouteIds.contains(segment.routeId))
         m_visibleRouteIds.append(segment.routeId);
+
+    if (segment.showArrows) {
+        QColor color = segment.effectiveArrowColor();
+        QString iconKey = RouteArrowIcon::iconKeyForColor(color);
+        m_arrowIconRefCount[iconKey]++;
+        if (m_arrowIconRefCount[iconKey] == 1 && m_map) {
+            QImage image = RouteArrowIcon::generateArrowIcon(color);
+            qreal dpr = QGuiApplication::primaryScreen()
+                            ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                            : 1.0;
+            QImage scaled = image.scaledToWidth(
+                static_cast<int>(image.width() * dpr), Qt::SmoothTransformation);
+            m_map->addImage(iconKey, scaled);
+        }
+    }
+
     ensureLayerSetup();
     rebuildSource();
 }
@@ -88,6 +107,21 @@ void RouteManager::addRouteSegments(const QVector<MapRouteSegment>& segments) {
         m_segments.append(seg);
         if (!m_visibleRouteIds.contains(seg.routeId))
             m_visibleRouteIds.append(seg.routeId);
+
+        if (seg.showArrows) {
+            QColor color = seg.effectiveArrowColor();
+            QString iconKey = RouteArrowIcon::iconKeyForColor(color);
+            m_arrowIconRefCount[iconKey]++;
+            if (m_arrowIconRefCount[iconKey] == 1 && m_map) {
+                QImage image = RouteArrowIcon::generateArrowIcon(color);
+                qreal dpr = QGuiApplication::primaryScreen()
+                                ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                                : 1.0;
+                QImage scaled = image.scaledToWidth(
+                    static_cast<int>(image.width() * dpr), Qt::SmoothTransformation);
+                m_map->addImage(iconKey, scaled);
+            }
+        }
     }
     ensureLayerSetup();
     rebuildSource();
@@ -98,6 +132,19 @@ void RouteManager::removeRouteSegment(const QString& id) {
     auto it = std::find_if(m_segments.begin(), m_segments.end(),
         [&id](const MapRouteSegment& s) { return s.id == id; });
     if (it == m_segments.end()) return;
+
+    if (it->showArrows) {
+        QString iconKey = RouteArrowIcon::iconKeyForColor(it->effectiveArrowColor());
+        if (m_arrowIconRefCount.contains(iconKey)) {
+            m_arrowIconRefCount[iconKey]--;
+            if (m_arrowIconRefCount[iconKey] <= 0) {
+                if (m_map)
+                    m_map->removeImage(iconKey);
+                m_arrowIconRefCount.remove(iconKey);
+            }
+        }
+    }
+
     QString routeId = it->routeId;
     m_segments.erase(it);
     bool hasRoute = std::any_of(m_segments.begin(), m_segments.end(),
@@ -114,6 +161,19 @@ void RouteManager::removeRouteSegments(const QStringList& ids) {
         auto it = std::find_if(m_segments.begin(), m_segments.end(),
             [&id](const MapRouteSegment& s) { return s.id == id; });
         if (it == m_segments.end()) continue;
+
+        if (it->showArrows) {
+            QString iconKey = RouteArrowIcon::iconKeyForColor(it->effectiveArrowColor());
+            if (m_arrowIconRefCount.contains(iconKey)) {
+                m_arrowIconRefCount[iconKey]--;
+                if (m_arrowIconRefCount[iconKey] <= 0) {
+                    if (m_map)
+                        m_map->removeImage(iconKey);
+                    m_arrowIconRefCount.remove(iconKey);
+                }
+            }
+        }
+
         QString routeId = it->routeId;
         m_segments.erase(it);
         bool hasRoute = std::any_of(m_segments.begin(), m_segments.end(),
@@ -127,14 +187,52 @@ void RouteManager::removeRouteSegments(const QStringList& ids) {
 
 void RouteManager::clearSegments() {
     if (m_layerSetup && m_map) {
+        m_map->removeLayer("routes-arrows");
         m_map->removeLayer("routes-labels");
         m_map->removeLayer("routes-dashed");
         m_map->removeLayer("routes-solid");
         m_map->removeSource("routes");
         m_layerSetup = false;
     }
+    unregisterArrowIcons();
     m_segments.clear();
     m_visibleRouteIds.clear();
+}
+
+void RouteManager::registerArrowIcons()
+{
+    if (!m_map) return;
+
+    QSet<QString> registered;
+    for (const auto& seg : m_segments) {
+        if (!seg.showArrows) continue;
+        QColor color = seg.effectiveArrowColor();
+        QString iconKey = RouteArrowIcon::iconKeyForColor(color);
+        if (registered.contains(iconKey)) continue;
+        registered.insert(iconKey);
+
+        m_arrowIconRefCount[iconKey]++;
+        if (m_arrowIconRefCount[iconKey] == 1) {
+            QImage image = RouteArrowIcon::generateArrowIcon(color);
+            qreal dpr = QGuiApplication::primaryScreen()
+                            ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                            : 1.0;
+            QImage scaled = image.scaledToWidth(
+                static_cast<int>(image.width() * dpr), Qt::SmoothTransformation);
+            m_map->addImage(iconKey, scaled);
+        }
+    }
+}
+
+void RouteManager::unregisterArrowIcons()
+{
+    if (m_map) {
+        for (auto it = m_arrowIconRefCount.begin(); it != m_arrowIconRefCount.end(); ++it) {
+            if (it.value() > 0)
+                m_map->removeImage(it.key());
+        }
+    }
+    m_arrowIconRefCount.clear();
 }
 
 void RouteManager::ensureLayerSetup() {
@@ -184,6 +282,20 @@ void RouteManager::ensureLayerSetup() {
     m_map->setLayoutProperty("routes-labels", "filter",
         QVariantList{"!=", QVariantList{"get", "title"}, ""});
 
+    registerArrowIcons();
+    m_map->addLayer("routes-arrows", QVariantMap{{"type", "symbol"}, {"source", "routes"}}, before);
+    m_map->setLayoutProperty("routes-arrows", "symbol-placement", "line");
+    m_map->setLayoutProperty("routes-arrows", "symbol-spacing", ARROW_SPACING);
+    m_map->setLayoutProperty("routes-arrows", "icon-image",
+        QVariantList{"concat", "route-arrow-", QVariantList{"get", "arrowColor"}});
+    m_map->setLayoutProperty("routes-arrows", "icon-size",
+        QVariantList{"get", "arrowSize"});
+    m_map->setLayoutProperty("routes-arrows", "icon-rotation-alignment", "map");
+    m_map->setLayoutProperty("routes-arrows", "icon-allow-overlap", true);
+    m_map->setLayoutProperty("routes-arrows", "icon-ignore-placement", true);
+    m_map->setLayoutProperty("routes-arrows", "filter",
+        QVariantList{"==", QVariantList{"get", "showArrows"}, true});
+
     m_layerSetup = true;
 }
 
@@ -199,16 +311,20 @@ void RouteManager::updateFilter() {
     QVariantList solidTypeFilter = {"==", QVariantList{"get", "lineType"}, "solid"};
     QVariantList dashedTypeFilter = {"==", QVariantList{"get", "lineType"}, "dashed"};
     QVariantList labelTypeFilter = {"!=", QVariantList{"get", "title"}, ""};
+    QVariantList arrowBaseFilter = {"==", QVariantList{"get", "showArrows"}, true};
 
     if (m_visibleRouteIds.isEmpty()) {
         QVariantList hideFilter = {"==", "1", "0"};
         m_map->setLayoutProperty("routes-solid", "filter", hideFilter);
         m_map->setLayoutProperty("routes-dashed", "filter", hideFilter);
         m_map->setLayoutProperty("routes-labels", "filter", hideFilter);
+        m_map->setLayoutProperty("routes-arrows", "filter",
+            QVariantList{"all", arrowBaseFilter, hideFilter});
     } else if (m_visibleRouteIds.size() == allRouteIds().size()) {
         m_map->setLayoutProperty("routes-solid", "filter", solidTypeFilter);
         m_map->setLayoutProperty("routes-dashed", "filter", dashedTypeFilter);
         m_map->setLayoutProperty("routes-labels", "filter", labelTypeFilter);
+        m_map->setLayoutProperty("routes-arrows", "filter", arrowBaseFilter);
     } else {
         QVariantList visibleIds;
         for (const auto& id : m_visibleRouteIds) visibleIds << id;
@@ -220,6 +336,8 @@ void RouteManager::updateFilter() {
             QVariantList{"all", dashedTypeFilter, routeIdFilter});
         m_map->setLayoutProperty("routes-labels", "filter",
             QVariantList{"all", labelTypeFilter, routeIdFilter});
+        m_map->setLayoutProperty("routes-arrows", "filter",
+            QVariantList{"all", arrowBaseFilter, routeIdFilter});
     }
 }
 

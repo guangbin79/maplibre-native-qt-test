@@ -74,6 +74,12 @@ QVector<MapRouteSegment> GeoJsonImporter::parseRoutes(const QByteArray& geojson,
         seg.width = properties["width"].toDouble();
         seg.dashed = (properties["lineType"].toString() == "dashed");
         seg.title = properties["title"].toString();
+        seg.showArrows = properties.value("showArrows").toBool(false);
+        seg.arrowSize = properties.value("arrowSize").toDouble(1.0);
+        QString arrowColorStr = properties.value("arrowColor").toString();
+        if (!arrowColorStr.isEmpty()) {
+            seg.arrowColor = QColor(arrowColorStr);
+        }
         seg.coordinates = coordinates;
         result.append(seg);
     }

@@ -46,6 +46,9 @@ void tst_GeoJsonRoundTrip::testRouteRoundTrip()
     original.width = 4.0;
     original.dashed = false;
     original.title = "线路A";
+    original.showArrows = true;
+    original.arrowSize = 1.5;
+    original.arrowColor = QColor("#FFFFFF");
 
     QByteArray geojson = GeoJsonExporter::buildRoutes({original});
 
@@ -60,6 +63,9 @@ void tst_GeoJsonRoundTrip::testRouteRoundTrip()
     QCOMPARE(parsed[0].width, original.width);
     QCOMPARE(parsed[0].dashed, original.dashed);
     QCOMPARE(parsed[0].title, original.title);
+    QCOMPARE(parsed[0].showArrows, original.showArrows);
+    QCOMPARE(parsed[0].arrowSize, original.arrowSize);
+    QCOMPARE(parsed[0].arrowColor, original.arrowColor);
     QCOMPARE(parsed[0].coordinates.size(), original.coordinates.size());
     for (int i = 0; i < original.coordinates.size(); ++i) {
         QCOMPARE(parsed[0].coordinates[i].first, original.coordinates[i].first);
@@ -124,6 +130,9 @@ void tst_GeoJsonRoundTrip::testMixedDataRoundTrip()
     seg.width = 3.0;
     seg.dashed = true;
     seg.title = "混合线路";
+    seg.showArrows = true;
+    seg.arrowSize = 2.0;
+    seg.arrowColor = QColor("#00FF00");
 
     MapPolygon poly;
     poly.id = "poly-mix";
@@ -164,6 +173,9 @@ void tst_GeoJsonRoundTrip::testMixedDataRoundTrip()
     QCOMPARE(parsedSeg[0].width, seg.width);
     QCOMPARE(parsedSeg[0].dashed, seg.dashed);
     QCOMPARE(parsedSeg[0].title, seg.title);
+    QCOMPARE(parsedSeg[0].showArrows, seg.showArrows);
+    QCOMPARE(parsedSeg[0].arrowSize, seg.arrowSize);
+    QCOMPARE(parsedSeg[0].arrowColor, seg.arrowColor);
 
     QCOMPARE(parsedPoly.size(), 1);
     QCOMPARE(parsedPoly[0].id, poly.id);
