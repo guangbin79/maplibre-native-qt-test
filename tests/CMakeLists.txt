@@ -37,6 +37,12 @@ target_include_directories(tst_mappolygon PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tst_mappolygon PRIVATE Qt6::Test Qt6::Gui)
 add_test(NAME tst_mappolygon COMMAND tst_mappolygon)
 
+# tst_arrow_icon_generation
+add_executable(tst_arrow_icon_generation tst_arrow_icon_generation.cpp ${CMAKE_SOURCE_DIR}/routearrowicon.cpp)
+target_include_directories(tst_arrow_icon_generation PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(tst_arrow_icon_generation PRIVATE Qt6::Test Qt6::Gui)
+add_test(NAME tst_arrow_icon_generation COMMAND tst_arrow_icon_generation)
+
 # tst_routegeojsonbuilder
 add_executable(tst_routegeojsonbuilder tst_routegeojsonbuilder.cpp ${CMAKE_SOURCE_DIR}/routegeojsonbuilder.cpp)
 target_include_directories(tst_routegeojsonbuilder PRIVATE ${CMAKE_SOURCE_DIR})
