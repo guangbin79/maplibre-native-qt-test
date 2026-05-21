@@ -52,6 +52,19 @@
  * mapContainer->setVisibleRouteIds({"route-A"});
  * @endcode
  *
+ * 方向箭头示例：
+ * @code
+ * // 启用方向箭头，使用自定义颜色
+ * seg1.showArrows = true;
+ * seg1.arrowSize = 1.5;
+ * seg1.arrowColor = QColor("#FFFFFF");       // 白色箭头
+ *
+ * // 启用方向箭头，跟随路线颜色
+ * seg2.showArrows = true;
+ * seg2.arrowSize = 1.0;
+ * // arrowColor 保持默认（无效）→ effectiveArrowColor() 返回 color
+ * @endcode
+ *
  * @see MapContainer::addRouteSegments(), MapContainer::setVisibleRouteIds()
  */
 struct MapRouteSegment {
@@ -62,6 +75,20 @@ struct MapRouteSegment {
     double width = 0.0;                          ///< 像素宽度
     bool dashed = false;                         ///< 是否虚线
     QString title;                               ///< 线路名称（空=不显示标签）
+    bool showArrows = false;                     ///< 是否显示方向箭头
+    double arrowSize = 1.0;                      ///< 箭头大小缩放因子
+    QColor arrowColor;                           ///< 箭头颜色（无效=跟随 color）
+
+    /**
+     * @brief 获取有效的箭头颜色
+     *
+     * 当 arrowColor 无效时返回 color，否则返回 arrowColor。
+     *
+     * @return 有效的箭头颜色
+     */
+    QColor effectiveArrowColor() const {
+        return arrowColor.isValid() ? arrowColor : color;
+    }
 
     /**
      * @brief 验证线段数据是否有效

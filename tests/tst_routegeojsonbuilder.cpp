@@ -128,6 +128,89 @@ private slots:
         QCOMPARE(props["lineType"].toString(), QStringLiteral("solid"));
     }
 
+    void testArrowPropertiesDefault()
+    {
+        MapRouteSegment seg;
+        seg.id = "arrow-default";
+        seg.color = QColor("#FF0000");
+        seg.width = 3.0;
+        seg.coordinates = {{0.0, 0.0}, {1.0, 1.0}};
+
+        QByteArray result = RouteGeoJsonBuilder::buildFeatureCollection({seg});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject props = doc.object()["features"][0].toObject()["properties"].toObject();
+
+        QCOMPARE(props["showArrows"].toBool(), false);
+        QCOMPARE(props["arrowSize"].toDouble(), 1.0);
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#ff0000"));
+    }
+
+    void testArrowPropertiesEnabled()
+    {
+        MapRouteSegment seg;
+        seg.id = "arrow-enabled";
+        seg.color = QColor("#FF0000");
+        seg.width = 3.0;
+        seg.showArrows = true;
+        seg.arrowSize = 2.0;
+        seg.arrowColor = QColor("#FFFFFF");
+        seg.coordinates = {{0.0, 0.0}, {1.0, 1.0}};
+
+        QByteArray result = RouteGeoJsonBuilder::buildFeatureCollection({seg});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject props = doc.object()["features"][0].toObject()["properties"].toObject();
+
+        QCOMPARE(props["showArrows"].toBool(), true);
+        QCOMPARE(props["arrowSize"].toDouble(), 2.0);
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#ffffff"));
+    }
+
+    void testArrowColorFallsBackToColor()
+    {
+        MapRouteSegment seg;
+        seg.id = "arrow-fallback";
+        seg.color = QColor("#123456");
+        seg.width = 2.0;
+        seg.showArrows = true;
+        seg.arrowSize = 1.5;
+        seg.coordinates = {{0.0, 0.0}, {1.0, 1.0}};
+
+        QByteArray result = RouteGeoJsonBuilder::buildFeatureCollection({seg});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject props = doc.object()["features"][0].toObject()["properties"].toObject();
+
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#123456"));
+    }
+
+    void testArrowPropertiesPreserveOriginals()
+    {
+        MapRouteSegment seg;
+        seg.id = "orig-test";
+        seg.routeId = "route-X";
+        seg.color = QColor("#AABBCC");
+        seg.width = 7.0;
+        seg.dashed = true;
+        seg.title = "Test Title";
+        seg.showArrows = true;
+        seg.arrowSize = 3.0;
+        seg.arrowColor = QColor("#DDEEFF");
+        seg.coordinates = {{10.0, 20.0}, {30.0, 40.0}};
+
+        QByteArray result = RouteGeoJsonBuilder::buildFeatureCollection({seg});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject props = doc.object()["features"][0].toObject()["properties"].toObject();
+
+        QCOMPARE(props["id"].toString(), QStringLiteral("orig-test"));
+        QCOMPARE(props["routeId"].toString(), QStringLiteral("route-X"));
+        QCOMPARE(props["lineType"].toString(), QStringLiteral("dashed"));
+        QCOMPARE(props["color"].toString(), QStringLiteral("#aabbcc"));
+        QCOMPARE(props["width"].toDouble(), 7.0);
+        QCOMPARE(props["title"].toString(), QStringLiteral("Test Title"));
+        QCOMPARE(props["showArrows"].toBool(), true);
+        QCOMPARE(props["arrowSize"].toDouble(), 3.0);
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#ddeeff"));
+    }
+
     void testManyCoordinates()
     {
         MapRouteSegment seg;

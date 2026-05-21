@@ -133,6 +133,58 @@ private slots:
         QVERIFY(seg.routeId.isEmpty());
         QVERIFY(seg.isValid());
     }
+
+    void showArrows_default_is_false()
+    {
+        MapRouteSegment seg;
+        QCOMPARE(seg.showArrows, false);
+    }
+
+    void arrowSize_default_is_1()
+    {
+        MapRouteSegment seg;
+        QCOMPARE(seg.arrowSize, 1.0);
+    }
+
+    void arrowColor_default_invalid()
+    {
+        MapRouteSegment seg;
+        QVERIFY(!seg.arrowColor.isValid());
+    }
+
+    void effectiveArrowColor_fallback_to_color()
+    {
+        MapRouteSegment seg;
+        seg.color = QColor(255, 0, 0);
+        QVERIFY(!seg.arrowColor.isValid());
+        QCOMPARE(seg.effectiveArrowColor(), QColor(255, 0, 0));
+    }
+
+    void effectiveArrowColor_uses_custom()
+    {
+        MapRouteSegment seg;
+        seg.color = QColor(255, 0, 0);
+        seg.arrowColor = QColor(0, 0, 255);
+        QCOMPARE(seg.effectiveArrowColor(), QColor(0, 0, 255));
+    }
+
+    void isValid_unchanged_by_arrow_fields()
+    {
+        MapRouteSegment seg;
+        seg.id = QStringLiteral("seg-arrow");
+        seg.coordinates = {{39.9, 116.4}, {31.2, 121.5}};
+        seg.color = QColor(0, 128, 0);
+        seg.width = 2.0;
+        QVERIFY(seg.isValid());
+
+        seg.showArrows = true;
+        seg.arrowSize = 2.0;
+        seg.arrowColor = QColor("#FFFFFF");
+        QVERIFY(seg.isValid());
+
+        seg.arrowColor = QColor();
+        QVERIFY(seg.isValid());
+    }
 };
 
 QTEST_MAIN(MapRouteSegmentTest)

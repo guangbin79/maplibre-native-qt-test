@@ -27,6 +27,9 @@ QByteArray RouteGeoJsonBuilder::buildFeatureCollection(
         properties["color"] = seg.color.name();
         properties["width"] = seg.width;
         properties["title"] = seg.title;
+        properties["showArrows"] = seg.showArrows;
+        properties["arrowSize"] = seg.arrowSize;
+        properties["arrowColor"] = seg.effectiveArrowColor().name();
 
         QJsonObject feature;
         feature["type"] = "Feature";
