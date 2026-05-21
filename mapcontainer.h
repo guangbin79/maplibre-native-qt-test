@@ -195,6 +195,20 @@ public:
      */
     QMapLibre::Map *map() const;
 
+    // ===== Manager 访问接口 =====
+
+    /** @brief 获取标注管理器 @see AnnotationManager */
+    AnnotationManager* annotationManager() const { return m_annotationManager; }
+
+    /** @brief 获取路线管理器 @see RouteManager */
+    RouteManager* routeManager() const { return m_routeManager; }
+
+    /** @brief 获取多边形管理器 @see PolygonManager */
+    PolygonManager* polygonManager() const { return m_polygonManager; }
+
+    /** @brief 获取位置指示器管理器 @see LocationIndicatorManager */
+    LocationIndicatorManager* locationIndicatorManager() const { return m_locationIndicatorManager; }
+
     /**
      * @brief 设置地图样式
      *
