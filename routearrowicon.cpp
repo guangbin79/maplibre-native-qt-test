@@ -6,7 +6,7 @@
 QImage RouteArrowIcon::generateArrowIcon(const QColor& color, int baseSize)
 {
     if (baseSize <= 0)
-        baseSize = 24;
+        baseSize = 12;
 
     QImage image(baseSize, baseSize, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);

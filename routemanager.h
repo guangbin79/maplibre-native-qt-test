@@ -61,7 +61,7 @@ private:
     void registerArrowIcons();
     void unregisterArrowIcons();
 
-    static constexpr int ARROW_SPACING = 200;
+    static constexpr int ARROW_SPACING = 100;
 
     QMapLibre::Map* m_map;
     QVector<MapRouteSegment> m_segments;

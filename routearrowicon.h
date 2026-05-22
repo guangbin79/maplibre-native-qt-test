@@ -7,6 +7,6 @@
 class RouteArrowIcon
 {
 public:
-    static QImage generateArrowIcon(const QColor& color, int baseSize = 24);
+    static QImage generateArrowIcon(const QColor& color, int baseSize = 12);
     static QString iconKeyForColor(const QColor& color);
 };
