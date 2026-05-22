@@ -87,7 +87,19 @@ struct MapRouteSegment {
      * @return 有效的箭头颜色
      */
     QColor effectiveArrowColor() const {
-        return arrowColor.isValid() ? arrowColor : color;
+        if (arrowColor.isValid())
+            return arrowColor;
+        // Auto: invert luminance while preserving hue
+        qreal r = color.redF();
+        qreal g = color.greenF();
+        qreal b = color.blueF();
+        // Rec. 709 luminance
+        qreal lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        qreal factor = lum < 0.5 ? 1.5 : 0.5;
+        return QColor(
+            qMin(255, static_cast<int>(r * factor * 255)),
+            qMin(255, static_cast<int>(g * factor * 255)),
+            qMin(255, static_cast<int>(b * factor * 255)));
     }
 
     /**

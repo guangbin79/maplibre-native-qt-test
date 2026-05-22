@@ -302,7 +302,7 @@ void TestRouteManager::testArrowRefCountDifferentColors()
 
     mgr.removeRouteSegment("s1");
     QCOMPARE(mgr.segments().size(), 1);
-    QCOMPARE(mgr.segments().first().effectiveArrowColor(), QColor("#00ff00"));
+    QCOMPARE(mgr.segments().first().effectiveArrowColor(), QColor("#007f00"));
 }
 
 void TestRouteManager::testRemoveArrowSegmentDecrements()

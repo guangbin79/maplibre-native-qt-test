@@ -179,7 +179,7 @@ private slots:
         QJsonDocument doc = QJsonDocument::fromJson(result);
         QJsonObject props = doc.object()["features"][0].toObject()["properties"].toObject();
 
-        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#123456"));
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#1b4e81"));
     }
 
     void testArrowPropertiesPreserveOriginals()
