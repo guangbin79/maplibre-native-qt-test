@@ -74,8 +74,8 @@ void TestArrowIconGeneration::testInvalidColorNoCrash()
 void TestArrowIconGeneration::testDefaultBaseSize()
 {
     QImage img = RouteArrowIcon::generateArrowIcon(QColor("#FF0000"));
-    QCOMPARE(img.width(), 12);
-    QCOMPARE(img.height(), 12);
+    QCOMPARE(img.width(), 8);
+    QCOMPARE(img.height(), 8);
 }
 
 void TestArrowIconGeneration::testCustomBaseSize()

@@ -402,7 +402,7 @@ MainWindow::MainWindow(QWidget *parent)
         seg1.width = 6.0;
         seg1.dashed = false;
         seg1.showArrows = true;
-        seg1.arrowSize = 0.7;
+        seg1.arrowSize = 0.4;
         seg1.arrowColor = QColor("#333333");
         segs.append(seg1);
 
