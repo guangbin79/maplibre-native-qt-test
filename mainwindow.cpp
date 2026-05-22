@@ -401,6 +401,7 @@ MainWindow::MainWindow(QWidget *parent)
         seg1.color = QColor(255, 0, 0);
         seg1.width = 4.0;
         seg1.dashed = false;
+        seg1.showArrows = true;
         segs.append(seg1);
 
         // 蓝色虚线线路 (route-B)
