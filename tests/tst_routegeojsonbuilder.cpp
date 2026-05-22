@@ -142,7 +142,7 @@ private slots:
 
         QCOMPARE(props["showArrows"].toBool(), false);
         QCOMPARE(props["arrowSize"].toDouble(), 1.0);
-        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#ff0000"));
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#000000"));
     }
 
     void testArrowPropertiesEnabled()
@@ -179,7 +179,7 @@ private slots:
         QJsonDocument doc = QJsonDocument::fromJson(result);
         QJsonObject props = doc.object()["features"][0].toObject()["properties"].toObject();
 
-        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#1b4e81"));
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#2366a9"));
     }
 
     void testArrowPropertiesPreserveOriginals()

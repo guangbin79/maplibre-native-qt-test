@@ -176,7 +176,7 @@ void tst_GeoJsonExporter::testRoutes()
         QCOMPARE(props["title"].toString(), QStringLiteral("线路B"));
         QCOMPARE(props["showArrows"].toBool(), false);
         QCOMPARE(props["arrowSize"].toDouble(), 1.0);
-        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#104b79"));
+        QCOMPARE(props["arrowColor"].toString(), QStringLiteral("#02080c"));
     }
 }
 

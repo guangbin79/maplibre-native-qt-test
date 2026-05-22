@@ -82,24 +82,23 @@ struct MapRouteSegment {
     /**
      * @brief 获取有效的箭头颜色
      *
-     * 当 arrowColor 无效时返回 color，否则返回 arrowColor。
+     * 当 arrowColor 无效时自动生成对比色，否则返回 arrowColor。
+     * 使用 HSV 亮度反转：将 V (明度) 取反，保证箭头与路线颜色有足够对比度。
      *
      * @return 有效的箭头颜色
      */
     QColor effectiveArrowColor() const {
         if (arrowColor.isValid())
             return arrowColor;
-        // Auto: invert luminance while preserving hue
-        qreal r = color.redF();
-        qreal g = color.greenF();
-        qreal b = color.blueF();
-        // Rec. 709 luminance
-        qreal lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        qreal factor = lum < 0.5 ? 1.5 : 0.5;
-        return QColor(
-            qMin(255, static_cast<int>(r * factor * 255)),
-            qMin(255, static_cast<int>(g * factor * 255)),
-            qMin(255, static_cast<int>(b * factor * 255)));
+        // Auto: invert luminance via HSV - rotate value (brightness) to opposite end
+        int h, s, v;
+        color.getHsv(&h, &s, &v);
+        // Invert brightness: high v -> low v, low v -> high v
+        int newV = 255 - v;
+        // Ensure minimum contrast: if result too close, push further
+        if (qAbs(newV - v) < 80)
+            newV = v < 128 ? qMin(255, v + 120) : qMax(0, v - 120);
+        return QColor::fromHsv(h, s, newV);
     }
 
     /**

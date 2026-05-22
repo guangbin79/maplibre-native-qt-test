@@ -157,7 +157,8 @@ private slots:
         MapRouteSegment seg;
         seg.color = QColor(255, 0, 0);
         QVERIFY(!seg.arrowColor.isValid());
-        QCOMPARE(seg.effectiveArrowColor(), QColor(255, 0, 0));
+        QColor arrowColor = seg.effectiveArrowColor();
+        QCOMPARE(arrowColor.toRgb(), QColor(0, 0, 0));
     }
 
     void effectiveArrowColor_uses_custom()
