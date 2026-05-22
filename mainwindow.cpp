@@ -399,10 +399,10 @@ MainWindow::MainWindow(QWidget *parent)
         seg1.routeId = "route-A";
         seg1.coordinates = {{36.75, 3.05}, {36.76, 3.06}, {36.77, 3.07}};
         seg1.color = QColor(255, 0, 0);
-        seg1.width = 6.0;
+        seg1.width = 10.0;
         seg1.dashed = false;
         seg1.showArrows = true;
-        seg1.arrowSize = 0.25;
+        seg1.arrowSize = 0.8;
         seg1.arrowColor = QColor("#333333");
         segs.append(seg1);
 
