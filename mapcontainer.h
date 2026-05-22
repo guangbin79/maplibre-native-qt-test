@@ -1266,6 +1266,7 @@ private:
     bool m_mapReady = false;
 
     void connectMapSignals();
+    void applyLanguageLabels();
 
 private slots:
     void onCameraAnimStep();

@@ -1012,6 +1012,11 @@ void MapContainer::connectMapSignals()
             return;
         }
 
+        if (change == QMapLibre::Map::MapChangeDidFinishLoadingStyle) {
+            applyLanguageLabels();
+            return;
+        }
+
         if (change != QMapLibre::Map::MapChangeRegionWillChange &&
             change != QMapLibre::Map::MapChangeRegionIsChanging &&
             change != QMapLibre::Map::MapChangeRegionDidChange &&
@@ -1061,6 +1066,24 @@ void MapContainer::connectMapSignals()
     m_locationOverlay->setStyleSheet(QStringLiteral("background: transparent;"));
     m_locationOverlay->hide();
     m_locationIndicatorManager->setOverlayWidget(m_locationOverlay);
+}
+
+void MapContainer::applyLanguageLabels()
+{
+    const QStringList layers = {
+        "gb-place-city-capital",
+        "gb-place-city",
+        "gb-place-town"
+    };
+
+    QMapLibre::Map* map = m_glWidget->map();
+    for (const QString& id : layers) {
+        if (map->layerExists(id)) {
+            map->setLayoutProperty(id, "text-field", "{name:latin}");
+        } else {
+            qDebug() << "applyLanguageLabels: skip" << id;
+        }
+    }
 }
 
 void MapContainer::onFollowStep() {
