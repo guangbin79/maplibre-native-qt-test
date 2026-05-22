@@ -18,9 +18,9 @@ QImage RouteArrowIcon::generateArrowIcon(const QColor& color, int baseSize)
     const qreal cx = baseSize / 2.0;
 
     QPainterPath path;
-    path.moveTo(cx, margin);                              // top vertex
-    path.lineTo(margin, baseSize - margin);               // bottom-left
-    path.lineTo(baseSize - margin, baseSize - margin);    // bottom-right
+    path.moveTo(baseSize - margin, cx);                   // right vertex (tip)
+    path.lineTo(margin, margin);                           // top-left
+    path.lineTo(margin, baseSize - margin);                // bottom-left
     path.closeSubpath();
 
     painter.setBrush(color.isValid() ? color : QColor(Qt::black));
