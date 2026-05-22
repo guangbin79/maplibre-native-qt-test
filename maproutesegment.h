@@ -56,13 +56,16 @@
  * @code
  * // 启用方向箭头，使用自定义颜色
  * seg1.showArrows = true;
- * seg1.arrowSize = 1.5;
- * seg1.arrowColor = QColor("#FFFFFF");       // 白色箭头
+ * seg1.arrowSize = 1.5;                      // 缩放因子（基于 8px 基础尺寸）
+ * seg1.arrowColor = QColor("#FFFFFF");        // 白色箭头
  *
- * // 启用方向箭头，跟随路线颜色
+ * // 启用方向箭头，自动对比色（HSV亮度取反）
  * seg2.showArrows = true;
  * seg2.arrowSize = 1.0;
- * // arrowColor 保持默认（无效）→ effectiveArrowColor() 返回 color
+ * // arrowColor 不设置 → effectiveArrowColor() 自动生成对比色
+ * //   红色路线(#ff0000) → 黑色箭头(#000000)
+ * //   深蓝路线 → 浅蓝箭头
+ * //   色相不变，明度取反，保证箭头可见
  * @endcode
  *
  * @see MapContainer::addRouteSegments(), MapContainer::setVisibleRouteIds()
@@ -77,7 +80,7 @@ struct MapRouteSegment {
     QString title;                               ///< 线路名称（空=不显示标签）
     bool showArrows = false;                     ///< 是否显示方向箭头
     double arrowSize = 1.0;                      ///< 箭头大小缩放因子
-    QColor arrowColor;                           ///< 箭头颜色（无效=跟随 color）
+    QColor arrowColor;                           ///< 箭头颜色（无效=自动亮度取反）
 
     /**
      * @brief 获取有效的箭头颜色
