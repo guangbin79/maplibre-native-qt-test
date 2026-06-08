@@ -74,6 +74,7 @@ void RouteManager::setSegments(const QVector<MapRouteSegment>& segments) {
     m_visibleRouteIds = allRouteIds();
     ensureLayerSetup();
     rebuildSource();
+    updateFilter();
 }
 
 void RouteManager::addRouteSegment(const MapRouteSegment& segment) {
@@ -99,6 +100,7 @@ void RouteManager::addRouteSegment(const MapRouteSegment& segment) {
 
     ensureLayerSetup();
     rebuildSource();
+    updateFilter();
 }
 
 void RouteManager::addRouteSegments(const QVector<MapRouteSegment>& segments) {
@@ -125,6 +127,7 @@ void RouteManager::addRouteSegments(const QVector<MapRouteSegment>& segments) {
     }
     ensureLayerSetup();
     rebuildSource();
+    updateFilter();
 }
 
 void RouteManager::removeRouteSegment(const QString& id) {
@@ -297,11 +300,19 @@ void RouteManager::ensureLayerSetup() {
         QVariantList{"==", QVariantList{"get", "showArrows"}, true});
 
     m_layerSetup = true;
+    updateFilter();
 }
 
 void RouteManager::rebuildSource() {
     if (!m_layerSetup || !m_ready || !m_map) return;
-    QByteArray geojson = RouteGeoJsonBuilder::buildFeatureCollection(m_segments);
+
+    QVector<MapRouteSegment> visibleSegments;
+    for (const auto& seg : m_segments) {
+        if (m_visibleRouteIds.contains(seg.routeId))
+            visibleSegments.append(seg);
+    }
+
+    QByteArray geojson = RouteGeoJsonBuilder::buildFeatureCollection(visibleSegments);
     m_map->updateSource("routes", QVariantMap{{"data", geojson}});
 }
 
@@ -318,40 +329,29 @@ void RouteManager::updateFilter() {
         m_map->setLayoutProperty("routes-solid", "filter", hideFilter);
         m_map->setLayoutProperty("routes-dashed", "filter", hideFilter);
         m_map->setLayoutProperty("routes-labels", "filter", hideFilter);
-        m_map->setLayoutProperty("routes-arrows", "filter",
-            QVariantList{"all", arrowBaseFilter, hideFilter});
-    } else if (m_visibleRouteIds.size() == allRouteIds().size()) {
+        m_map->setLayoutProperty("routes-arrows", "filter", hideFilter);
+    } else {
         m_map->setLayoutProperty("routes-solid", "filter", solidTypeFilter);
         m_map->setLayoutProperty("routes-dashed", "filter", dashedTypeFilter);
         m_map->setLayoutProperty("routes-labels", "filter", labelTypeFilter);
         m_map->setLayoutProperty("routes-arrows", "filter", arrowBaseFilter);
-    } else {
-        QVariantList visibleIds;
-        for (const auto& id : m_visibleRouteIds) visibleIds << id;
-        QVariantList routeIdFilter = {"in", QVariantList{"get", "routeId"}, QVariantList{"literal", visibleIds}};
-
-        m_map->setLayoutProperty("routes-solid", "filter",
-            QVariantList{"all", solidTypeFilter, routeIdFilter});
-        m_map->setLayoutProperty("routes-dashed", "filter",
-            QVariantList{"all", dashedTypeFilter, routeIdFilter});
-        m_map->setLayoutProperty("routes-labels", "filter",
-            QVariantList{"all", labelTypeFilter, routeIdFilter});
-        m_map->setLayoutProperty("routes-arrows", "filter",
-            QVariantList{"all", arrowBaseFilter, routeIdFilter});
     }
 }
 
 void RouteManager::setVisibleRouteIds(const QStringList& routeIds) {
     m_visibleRouteIds = routeIds;
+    rebuildSource();
     updateFilter();
 }
 
 void RouteManager::showAllRoutes() {
     m_visibleRouteIds = allRouteIds();
+    rebuildSource();
     updateFilter();
 }
 
 void RouteManager::hideAllRoutes() {
     m_visibleRouteIds.clear();
+    rebuildSource();
     updateFilter();
 }

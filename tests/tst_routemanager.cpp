@@ -28,6 +28,9 @@ private slots:
     void testClearSegmentsClearsArrowState();
     void testHideAllRoutesWithArrows();
     void testSetSegmentsReplacesArrowState();
+    void testHideAllRoutesPreservesSegments();
+    void testShowAllRoutesRestoresAll();
+    void testSetSegmentsResetsVisibility();
 };
 
 static MapRouteSegment makeSegment(const QString& id, const QString& routeId,
@@ -386,6 +389,85 @@ void TestRouteManager::testSetSegmentsReplacesArrowState()
     QCOMPARE(mgr.allRouteIds().size(), 2);
     QVERIFY(mgr.segments().at(0).showArrows);
     QVERIFY(!mgr.segments().at(1).showArrows);
+}
+
+void TestRouteManager::testHideAllRoutesPreservesSegments()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    // Add segments with arrows from 2 different routes
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.addRouteSegment(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+
+    QCOMPARE(mgr.segments().size(), 2);
+    QCOMPARE(mgr.visibleRouteIds().size(), 2);
+    QVERIFY(mgr.segments().at(0).showArrows);
+    QVERIFY(mgr.segments().at(1).showArrows);
+
+    // Hide all routes
+    mgr.hideAllRoutes();
+
+    // Visibility state should be empty
+    QVERIFY(mgr.visibleRouteIds().isEmpty());
+
+    // But segments data should still exist (not deleted)
+    QCOMPARE(mgr.segments().size(), 2);
+    QVERIFY(mgr.segments().at(0).showArrows);
+    QVERIFY(mgr.segments().at(1).showArrows);
+
+    // Show all should restore visibility
+    mgr.showAllRoutes();
+    QCOMPARE(mgr.visibleRouteIds().size(), 2);
+}
+
+void TestRouteManager::testShowAllRoutesRestoresAll()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.addRouteSegment(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+    mgr.addRouteSegment(makeSegment("s3", "routeC", "No arrows"));
+
+    QCOMPARE(mgr.visibleRouteIds().size(), 3);
+
+    // Hide all
+    mgr.hideAllRoutes();
+    QVERIFY(mgr.visibleRouteIds().isEmpty());
+
+    // Show all should restore ALL 3 route IDs
+    mgr.showAllRoutes();
+    QCOMPARE(mgr.visibleRouteIds().size(), 3);
+    QVERIFY(mgr.visibleRouteIds().contains("routeA"));
+    QVERIFY(mgr.visibleRouteIds().contains("routeB"));
+    QVERIFY(mgr.visibleRouteIds().contains("routeC"));
+}
+
+void TestRouteManager::testSetSegmentsResetsVisibility()
+{
+    RouteManager mgr(nullptr);
+    mgr.setMapReady(true);
+
+    // Add initial segments
+    mgr.addRouteSegment(makeArrowSegment("s1", "routeA", QColor("#ff0000")));
+    mgr.addRouteSegment(makeArrowSegment("s2", "routeB", QColor("#00ff00")));
+
+    // Hide all
+    mgr.hideAllRoutes();
+    QVERIFY(mgr.visibleRouteIds().isEmpty());
+
+    // Replace segments via setSegments (should reset visibility to all)
+    QVector<MapRouteSegment> newSegs;
+    newSegs.append(makeArrowSegment("s3", "routeC", QColor("#0000ff")));
+    newSegs.append(makeSegment("s4", "routeD", "Route D"));
+
+    mgr.setSegments(newSegs);
+    QCOMPARE(mgr.segments().size(), 2);
+    // setSegments should set visibleRouteIds to all (routes "routeC" and "routeD")
+    QCOMPARE(mgr.visibleRouteIds().size(), 2);
+    QVERIFY(mgr.visibleRouteIds().contains("routeC"));
+    QVERIFY(mgr.visibleRouteIds().contains("routeD"));
 }
 
 QTEST_MAIN(TestRouteManager)
