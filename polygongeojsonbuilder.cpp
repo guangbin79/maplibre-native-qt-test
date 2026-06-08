@@ -36,7 +36,7 @@ static QJsonObject buildPolygonFeature(const MapPolygon& poly, const QJsonArray&
     properties["polygonId"] = poly.polygonId;
     properties["fillEnabled"] = poly.fillEnabled ? "true" : "false";
     properties["fillColor"] = poly.fillColor.name();
-    properties["fillOpacity"] = poly.fillOpacity;
+    properties["fillOpacity"] = poly.fillEnabled ? poly.fillOpacity : 0.0;
     properties["strokeColor"] = poly.strokeColor.name();
     properties["strokeWidth"] = poly.strokeWidth;
     properties["strokeType"] = poly.strokeDashed ? "dashed" : "solid";

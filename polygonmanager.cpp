@@ -189,6 +189,7 @@ void PolygonManager::ensureLayerSetup() {
     m_map->addLayer("polygons-labels", QVariantMap{{"type", "symbol"}, {"source", "polygons"}}, before);
     m_map->setLayoutProperty("polygons-labels", "symbol-placement", "point");
     m_map->setLayoutProperty("polygons-labels", "text-field", "{title}");
+    m_map->setLayoutProperty("polygons-labels", "text-font", QStringList{"NotoSans-Regular", "NotoSansSC-Regular", "NotoSansArabic-Regular"});
     m_map->setLayoutProperty("polygons-labels", "text-size", 12);
     m_map->setLayoutProperty("polygons-labels", "text-anchor", "center");
     m_map->setLayoutProperty("polygons-labels", "filter",
