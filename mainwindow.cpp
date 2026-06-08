@@ -517,7 +517,7 @@ MainWindow::MainWindow(QWidget *parent)
         poly2.title = QStringLiteral("蓝色三角");
         polys.append(poly2);
 
-        // 绿色五边形 - 无填充、粗实线边框
+        // 绿色无填充、粗实线边框五边形
         MapPolygon poly3;
         poly3.id = "demo-poly-3";
         poly3.polygonId = "polygon-demo-C";
@@ -540,17 +540,6 @@ MainWindow::MainWindow(QWidget *parent)
     ).arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnPolygonFocus);
     connect(btnPolygonFocus, &QPushButton::clicked, this, [this]() {
-        QVector<MapPolygon> polys;
-        MapPolygon poly;
-        poly.id = "focus-test-poly";
-        poly.polygonId = "polygon-demo-A";
-        poly.coordinates = {{36.74, 3.04}, {36.76, 3.04}, {36.76, 3.06}, {36.74, 3.06}};
-        poly.fillEnabled = true;
-        poly.fillColor = QColor(255, 0, 0);
-        poly.fillOpacity = 0.3;
-        poly.strokeColor = QColor(255, 0, 0);
-        poly.strokeWidth = 2.0;
-        m_mapContainer->setPolygons({poly});
         bool ok = m_mapContainer->focusOnPolygon("polygon-demo-A");
         if (!ok) {
             qDebug() << "focusOnPolygon failed";
