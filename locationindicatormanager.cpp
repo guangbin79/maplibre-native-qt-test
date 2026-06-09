@@ -26,12 +26,15 @@ void LocationIndicatorManager::setMapReady(bool ready)
 
 void LocationIndicatorManager::setLocation(double lat, double lon, double bearing, double zoom, double pitch)
 {
+    bool coordsChanged = (lat != m_lat || lon != m_lon);
     m_lat = lat;
     m_lon = lon;
     m_bearing = bearing;
     m_zoom = zoom;
     m_pitch = pitch;
-
+    if (coordsChanged) {
+        emit locationChanged(lat, lon, bearing, zoom, pitch);
+    }
     if (!m_ready)
         return;
 

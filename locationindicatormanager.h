@@ -276,6 +276,9 @@ public:
      */
     void repositionOverlay();
 
+signals:
+    void locationChanged(double lat, double lon, double bearing, double zoom, double pitch);
+
 private:
     void ensureLayerSetup();
     void rebuildSource();
