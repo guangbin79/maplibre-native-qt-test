@@ -1,4 +1,5 @@
 #include <QtTest/QtTest>
+#include <QSignalSpy>
 #include "locationindicatormanager.h"
 
 Q_DECLARE_METATYPE(LocationIndicatorManager::LocationMode)
@@ -30,6 +31,9 @@ private slots:
     void testSetLocationPitch();
     void testSetLocationAllParams();
     void testSetLocationSentinelNotApplied();
+    void testLocationChangedEmitted();
+    void testLocationChangedNotEmittedSameCoords();
+    void testLocationChangedCarriesAllParams();
 
 private:
     LocationIndicatorManager* mgr = nullptr;
@@ -232,6 +236,40 @@ void TestLocationIndicatorManager::testSetLocationSentinelNotApplied()
     QCOMPARE(mgr->bearing(), -1.0);
     QCOMPARE(mgr->zoom(), -1.0);
     QCOMPARE(mgr->pitch(), -1.0);
+}
+
+void TestLocationIndicatorManager::testLocationChangedEmitted()
+{
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    mgr->setLocation(39.9, 116.4);
+    QCOMPARE(spy.count(), 1);
+    QList<QVariant> args = spy.at(0);
+    QCOMPARE(args.at(0).toDouble(), 39.9);
+    QCOMPARE(args.at(1).toDouble(), 116.4);
+    QCOMPARE(args.at(2).toDouble(), -1.0);
+    QCOMPARE(args.at(3).toDouble(), -1.0);
+    QCOMPARE(args.at(4).toDouble(), -1.0);
+}
+
+void TestLocationIndicatorManager::testLocationChangedNotEmittedSameCoords()
+{
+    mgr->setLocation(39.9, 116.4);
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    mgr->setLocation(39.9, 116.4);
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestLocationIndicatorManager::testLocationChangedCarriesAllParams()
+{
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    mgr->setLocation(31.2, 121.5, 90.0, 15.0, 45.0);
+    QCOMPARE(spy.count(), 1);
+    QList<QVariant> args = spy.at(0);
+    QCOMPARE(args.at(0).toDouble(), 31.2);
+    QCOMPARE(args.at(1).toDouble(), 121.5);
+    QCOMPARE(args.at(2).toDouble(), 90.0);
+    QCOMPARE(args.at(3).toDouble(), 15.0);
+    QCOMPARE(args.at(4).toDouble(), 45.0);
 }
 
 QTEST_MAIN(TestLocationIndicatorManager)
