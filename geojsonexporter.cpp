@@ -11,6 +11,7 @@ QByteArray GeoJsonExporter::buildAnnotations(const QVector<MapAnnotation>& annot
         QJsonArray coords;
         coords.append(ann.longitude);
         coords.append(ann.latitude);
+        coords.append(ann.altitude);
 
         QJsonObject geometry;
         geometry["type"] = "Point";

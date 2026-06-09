@@ -25,6 +25,7 @@ private slots:
     void testPolygons();
     void testEmptyExport();
     void testPolygonAutoClose();
+    void testAltitudeExport();
 };
 
 void tst_GeoJsonExporter::testAnnotations()
@@ -63,10 +64,11 @@ void tst_GeoJsonExporter::testAnnotations()
         QCOMPARE(geometry["type"].toString(), QStringLiteral("Point"));
 
         QJsonArray coords = geometry["coordinates"].toArray();
-        QCOMPARE(coords.size(), 2);
-        // GeoJSON: [lon, lat]
+        QCOMPARE(coords.size(), 3);
+        // GeoJSON: [lon, lat, altitude]
         QCOMPARE(coords[0].toDouble(), 116.4074);
         QCOMPARE(coords[1].toDouble(), 39.9042);
+        QCOMPARE(coords[2].toDouble(), 0.0);
 
         QJsonObject props = feature["properties"].toObject();
         QCOMPARE(props["id"].toString(), QStringLiteral("test-ann-001"));
@@ -83,14 +85,83 @@ void tst_GeoJsonExporter::testAnnotations()
         QCOMPARE(geometry["type"].toString(), QStringLiteral("Point"));
 
         QJsonArray coords = geometry["coordinates"].toArray();
-        QCOMPARE(coords.size(), 2);
+        QCOMPARE(coords.size(), 3);
         QCOMPARE(coords[0].toDouble(), 116.3972);
         QCOMPARE(coords[1].toDouble(), 39.9163);
+        QCOMPARE(coords[2].toDouble(), 0.0);
 
         QJsonObject props = feature["properties"].toObject();
         QCOMPARE(props["id"].toString(), QStringLiteral("test-ann-002"));
         QCOMPARE(props["title"].toString(), QStringLiteral("故宫"));
         QCOMPARE(props["icon"].toString(), QStringLiteral("star"));
+    }
+}
+
+void tst_GeoJsonExporter::testAltitudeExport()
+{
+    // Test altitude=8849.0 (Mt. Everest)
+    {
+        MapAnnotation ann;
+        ann.id = "alt-everest";
+        ann.latitude = 27.9881;
+        ann.longitude = 86.9250;
+        ann.altitude = 8849.0;
+        ann.title = "Everest";
+        ann.iconName = "peak";
+
+        QByteArray result = GeoJsonExporter::buildAnnotations({ann});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject root = doc.object();
+        QJsonArray features = root["features"].toArray();
+        QCOMPARE(features.size(), 1);
+
+        QJsonObject feature = features[0].toObject();
+        QJsonObject geometry = feature["geometry"].toObject();
+        QJsonArray coords = geometry["coordinates"].toArray();
+        QCOMPARE(coords.size(), 3);
+        QCOMPARE(coords[2].toDouble(), 8849.0);
+    }
+
+    // Test altitude=0.0 (sea level, always serialized)
+    {
+        MapAnnotation ann;
+        ann.id = "alt-sealevel";
+        ann.latitude = 0.0;
+        ann.longitude = 0.0;
+        ann.altitude = 0.0;
+
+        QByteArray result = GeoJsonExporter::buildAnnotations({ann});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject root = doc.object();
+        QJsonArray features = root["features"].toArray();
+        QCOMPARE(features.size(), 1);
+
+        QJsonObject feature = features[0].toObject();
+        QJsonObject geometry = feature["geometry"].toObject();
+        QJsonArray coords = geometry["coordinates"].toArray();
+        QCOMPARE(coords.size(), 3);
+        QCOMPARE(coords[2].toDouble(), 0.0);
+    }
+
+    // Test altitude=-430.5 (Dead Sea, negative altitude)
+    {
+        MapAnnotation ann;
+        ann.id = "alt-deadsea";
+        ann.latitude = 31.5;
+        ann.longitude = 35.5;
+        ann.altitude = -430.5;
+
+        QByteArray result = GeoJsonExporter::buildAnnotations({ann});
+        QJsonDocument doc = QJsonDocument::fromJson(result);
+        QJsonObject root = doc.object();
+        QJsonArray features = root["features"].toArray();
+        QCOMPARE(features.size(), 1);
+
+        QJsonObject feature = features[0].toObject();
+        QJsonObject geometry = feature["geometry"].toObject();
+        QJsonArray coords = geometry["coordinates"].toArray();
+        QCOMPARE(coords.size(), 3);
+        QCOMPARE(coords[2].toDouble(), -430.5);
     }
 }
 
