@@ -32,6 +32,13 @@ private slots:
         QVERIFY(!ann.isValid());
     }
 
+    /** 默认海拔高度应为 0.0 */
+    void testAltitudeDefault()
+    {
+        MapAnnotation ann;
+        QCOMPARE(ann.altitude, 0.0);
+    }
+
     /** 填入合法数据后应为有效 */
     void testValidAnnotation()
     {
