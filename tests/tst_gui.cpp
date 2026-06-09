@@ -36,6 +36,7 @@ private slots:
     void testAnnotationApi();
     void testRouteApi();
     void testLocationApi();
+    void testLocationBearingZoomPitch();
     void testAutoRunSequence();
     void testFixedModePanBlocked();
     void testFixedModePanAllowed();
@@ -359,6 +360,63 @@ void GuiTest::testLocationApi()
     QTest::qWait(500);
     captureScreenshot("14_location_hidden");
     QVERIFY(!m_map->isLocationVisible());
+}
+
+void GuiTest::testLocationBearingZoomPitch()
+{
+    log("testLocationBearingZoomPitch: testing setLocation with bearing/zoom/pitch in Fixed mode");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_map->setLocationIcon(icon);
+    m_map->setLocation(36.75, 3.05);
+    m_map->showLocation();
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_map->setCenterOffset(200);
+    QTest::qWait(1000);
+
+    double initialBearing = m_map->map()->bearing();
+    double initialZoom = m_map->map()->zoom();
+    double initialPitch = m_map->map()->pitch();
+    log(QStringLiteral("Initial: bearing=%1 zoom=%2 pitch=%3")
+        .arg(initialBearing).arg(initialZoom).arg(initialPitch));
+
+    m_map->setLocation(36.75, 3.05, 90.0, 15.0, 45.0);
+    QTest::qWait(2000);
+    captureScreenshot("15_location_bearing_90_zoom_15_pitch_45");
+
+    double bearingAfter = m_map->map()->bearing();
+    double zoomAfter = m_map->map()->zoom();
+    double pitchAfter = m_map->map()->pitch();
+    log(QStringLiteral("After bearing=90: bearing=%1 zoom=%2 pitch=%3")
+        .arg(bearingAfter).arg(zoomAfter).arg(pitchAfter));
+
+    QVERIFY2(qAbs(bearingAfter - 90.0) < 5.0,
+             QStringLiteral("Bearing should be ~90, got %1").arg(bearingAfter).toUtf8());
+    QVERIFY2(qAbs(zoomAfter - 15.0) < 1.0,
+             QStringLiteral("Zoom should be ~15, got %1").arg(zoomAfter).toUtf8());
+    QVERIFY2(qAbs(pitchAfter - 45.0) < 5.0,
+             QStringLiteral("Pitch should be ~45, got %1").arg(pitchAfter).toUtf8());
+
+    m_map->setLocation(36.75, 3.05, 0.0, 10.0, 0.0);
+    QTest::qWait(2000);
+    captureScreenshot("15b_location_bearing_0_zoom_10_pitch_0");
+
+    double bearingReset = m_map->map()->bearing();
+    double zoomReset = m_map->map()->zoom();
+    double pitchReset = m_map->map()->pitch();
+    log(QStringLiteral("After reset: bearing=%1 zoom=%2 pitch=%3")
+        .arg(bearingReset).arg(zoomReset).arg(pitchReset));
+
+    QVERIFY2(qAbs(bearingReset) < 5.0,
+             QStringLiteral("Bearing should be ~0, got %1").arg(bearingReset).toUtf8());
+    QVERIFY2(qAbs(zoomReset - 10.0) < 1.0,
+             QStringLiteral("Zoom should be ~10, got %1").arg(zoomReset).toUtf8());
+    QVERIFY2(qAbs(pitchReset) < 5.0,
+             QStringLiteral("Pitch should be ~0, got %1").arg(pitchReset).toUtf8());
+
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+    m_map->hideLocation();
 }
 
 void GuiTest::testPolygonApi()

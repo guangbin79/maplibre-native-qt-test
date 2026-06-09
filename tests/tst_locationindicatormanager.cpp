@@ -24,6 +24,12 @@ private slots:
     void testFreeModeSetLocation();
     void testSetOverlayWidget();
     void testModeSwitchReset();
+    void testSetLocationBearingDefault();
+    void testSetLocationBearing();
+    void testSetLocationZoom();
+    void testSetLocationPitch();
+    void testSetLocationAllParams();
+    void testSetLocationSentinelNotApplied();
 
 private:
     LocationIndicatorManager* mgr = nullptr;
@@ -157,6 +163,75 @@ void TestLocationIndicatorManager::testModeSwitchReset()
     mgr->setLocation(39.9, 116.4);
     mgr->showLocation();
     mgr->hideLocation();
+}
+
+void TestLocationIndicatorManager::testSetLocationBearingDefault()
+{
+    QCOMPARE(mgr->bearing(), -1.0);
+    QCOMPARE(mgr->zoom(), -1.0);
+    QCOMPARE(mgr->pitch(), -1.0);
+
+    mgr->setLocation(39.9, 116.4);
+    QCOMPARE(mgr->bearing(), -1.0);
+    QCOMPARE(mgr->zoom(), -1.0);
+    QCOMPARE(mgr->pitch(), -1.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationBearing()
+{
+    mgr->setLocation(39.9, 116.4, 90.0);
+    QCOMPARE(mgr->bearing(), 90.0);
+
+    mgr->setLocation(39.9, 116.4, 0.0);
+    QCOMPARE(mgr->bearing(), 0.0);
+
+    mgr->setLocation(39.9, 116.4, -1.0);
+    QCOMPARE(mgr->bearing(), -1.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationZoom()
+{
+    mgr->setLocation(39.9, 116.4, -1.0, 15.0);
+    QCOMPARE(mgr->zoom(), 15.0);
+
+    mgr->setLocation(39.9, 116.4, -1.0, 0.0);
+    QCOMPARE(mgr->zoom(), 0.0);
+
+    mgr->setLocation(39.9, 116.4, -1.0, -1.0);
+    QCOMPARE(mgr->zoom(), -1.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationPitch()
+{
+    mgr->setLocation(39.9, 116.4, -1.0, -1.0, 45.0);
+    QCOMPARE(mgr->pitch(), 45.0);
+
+    mgr->setLocation(39.9, 116.4, -1.0, -1.0, 0.0);
+    QCOMPARE(mgr->pitch(), 0.0);
+
+    mgr->setLocation(39.9, 116.4, -1.0, -1.0, -1.0);
+    QCOMPARE(mgr->pitch(), -1.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationAllParams()
+{
+    mgr->setLocation(39.9, 116.4, 180.0, 16.0, 30.0);
+    QCOMPARE(mgr->bearing(), 180.0);
+    QCOMPARE(mgr->zoom(), 16.0);
+    QCOMPARE(mgr->pitch(), 30.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationSentinelNotApplied()
+{
+    mgr->setLocation(39.9, 116.4, 90.0, 15.0, 45.0);
+    QCOMPARE(mgr->bearing(), 90.0);
+    QCOMPARE(mgr->zoom(), 15.0);
+    QCOMPARE(mgr->pitch(), 45.0);
+
+    mgr->setLocation(39.9, 116.4);
+    QCOMPARE(mgr->bearing(), -1.0);
+    QCOMPARE(mgr->zoom(), -1.0);
+    QCOMPARE(mgr->pitch(), -1.0);
 }
 
 QTEST_MAIN(TestLocationIndicatorManager)
