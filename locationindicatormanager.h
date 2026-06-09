@@ -80,10 +80,13 @@ public:
      *
      * @param lat 纬度 [-90, 90]
      * @param lon 经度 [-180, 180]
+     * @param bearing 地图方向（度），-1 表示不改变
+     * @param zoom 缩放级别，-1 表示不改变
+     * @param pitch 倾斜角度（度），-1 表示不改变
      *
      * @see setMode(), showLocation()
      */
-    void setLocation(double lat, double lon);
+    void setLocation(double lat, double lon, double bearing = -1.0, double zoom = -1.0, double pitch = -1.0);
 
     /**
      * @brief 设置位置指示器图标
@@ -123,6 +126,24 @@ public:
      * @see setLocationRotation()
      */
     double locationRotation() const;
+
+    /**
+     * @brief 获取当前地图方向
+     * @return 地图方向（度），-1 表示不改变
+     */
+    double bearing() const;
+
+    /**
+     * @brief 获取当前缩放级别
+     * @return 缩放级别，-1 表示不改变
+     */
+    double zoom() const;
+
+    /**
+     * @brief 获取当前倾斜角度
+     * @return 倾斜角度（度），-1 表示不改变
+     */
+    double pitch() const;
 
     /**
      * @brief 设置位置指示器模式
@@ -273,6 +294,9 @@ private:
     bool m_visible = false;
     QImage m_icon;
     double m_rotation = 0.0;  ///< 当前旋转角度（度）
+    double m_bearing = -1.0;  ///< 地图方向（度），-1 表示不改变
+    double m_zoom = -1.0;     ///< 缩放级别，-1 表示不改变
+    double m_pitch = -1.0;    ///< 倾斜角度（度），-1 表示不改变
     int m_centerOffset = 0;
     bool m_followingPaused = false;
 };

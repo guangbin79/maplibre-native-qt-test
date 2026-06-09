@@ -24,10 +24,13 @@ void LocationIndicatorManager::setMapReady(bool ready)
         m_layerSetup = false;
 }
 
-void LocationIndicatorManager::setLocation(double lat, double lon)
+void LocationIndicatorManager::setLocation(double lat, double lon, double bearing, double zoom, double pitch)
 {
     m_lat = lat;
     m_lon = lon;
+    m_bearing = bearing;
+    m_zoom = zoom;
+    m_pitch = pitch;
 
     if (!m_ready)
         return;
@@ -74,6 +77,21 @@ void LocationIndicatorManager::setLocationRotation(double degrees)
 double LocationIndicatorManager::locationRotation() const
 {
     return m_rotation;
+}
+
+double LocationIndicatorManager::bearing() const
+{
+    return m_bearing;
+}
+
+double LocationIndicatorManager::zoom() const
+{
+    return m_zoom;
+}
+
+double LocationIndicatorManager::pitch() const
+{
+    return m_pitch;
 }
 
 void LocationIndicatorManager::setMode(LocationMode mode)
@@ -214,6 +232,12 @@ void LocationIndicatorManager::applyFixedMode()
     if (m_visible && !m_followingPaused) {
         QMapLibre::CameraOptions options;
         options.center = QVariant::fromValue(QMapLibre::Coordinate(m_lat, m_lon));
+        if (m_bearing >= 0)
+            options.bearing = QVariant::fromValue(m_bearing);
+        if (m_zoom >= 0)
+            options.zoom = QVariant::fromValue(m_zoom);
+        if (m_pitch >= 0)
+            options.pitch = QVariant::fromValue(m_pitch);
         m_map->jumpTo(options);
     }
 }

@@ -814,10 +814,13 @@ public:
      *
      * @param lat 纬度 [-90, 90]
      * @param lon 经度 [-180, 180]
+     * @param bearing 地图方向（度），-1 表示不改变
+     * @param zoom 缩放级别，-1 表示不改变
+     * @param pitch 倾斜角度（度），-1 表示不改变
      *
      * @see setLocationMode(), showLocation()
      */
-    void setLocation(double lat, double lon);
+    void setLocation(double lat, double lon, double bearing = -1.0, double zoom = -1.0, double pitch = -1.0);
 
     /**
      * @brief 设置位置指示器图标

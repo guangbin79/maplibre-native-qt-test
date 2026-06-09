@@ -847,10 +847,10 @@ QVector<MapPolygon> MapContainer::polygons() const {
 
 // ===== 位置指示器委托方法 =====
 
-void MapContainer::setLocation(double lat, double lon) {
+void MapContainer::setLocation(double lat, double lon, double bearing, double zoom, double pitch) {
     m_followTargetLat = lat;
     m_followTargetLon = lon;
-    m_locationIndicatorManager->setLocation(lat, lon);
+    m_locationIndicatorManager->setLocation(lat, lon, bearing, zoom, pitch);
 
     if (m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
         && !m_locationIndicatorManager->isFollowingPaused()) {
@@ -1101,4 +1101,26 @@ void MapContainer::onFollowStep() {
     map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
     m_lastLat = lat;
     m_lastLon = lon;
+
+    double bearing = m_locationIndicatorManager->bearing();
+    if (bearing >= 0) {
+        double currentBearing = map()->bearing();
+        double lerpedBearing = currentBearing + CameraMath::bearingDelta(currentBearing, bearing) * FOLLOW_LERP_FACTOR;
+        map()->setBearing(lerpedBearing);
+        m_lastBearing = lerpedBearing;
+    }
+
+    double zoom = m_locationIndicatorManager->zoom();
+    if (zoom >= 0) {
+        double lerpedZoom = CameraMath::lerp(map()->zoom(), zoom, FOLLOW_LERP_FACTOR);
+        map()->setZoom(CameraMath::clampedZoom(lerpedZoom));
+        m_lastZoom = lerpedZoom;
+    }
+
+    double pitch = m_locationIndicatorManager->pitch();
+    if (pitch >= 0) {
+        double lerpedPitch = CameraMath::lerp(map()->pitch(), pitch, FOLLOW_LERP_FACTOR);
+        map()->setPitch(CameraMath::clampedPitch(lerpedPitch));
+        m_lastPitch = lerpedPitch;
+    }
 }
