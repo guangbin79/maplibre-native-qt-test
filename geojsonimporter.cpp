@@ -27,6 +27,7 @@ QVector<MapAnnotation> GeoJsonImporter::parseAnnotations(const QByteArray& geojs
         double lat = coords[1].toDouble();
 
         MapAnnotation ann;
+        ann.altitude = coords.size() >= 3 ? coords[2].toDouble() : 0.0;
         ann.id = properties["id"].toString();
         ann.title = properties["title"].toString();
         ann.iconName = properties["icon"].toString();

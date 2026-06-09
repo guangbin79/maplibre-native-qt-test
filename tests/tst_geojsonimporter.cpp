@@ -16,6 +16,7 @@ private slots:
     void testInvalidJson();
     void testMissingFile();
     void testEmptyFeatureCollection();
+    void testAltitudeImport();
 };
 
 void tst_GeoJsonImporter::testParseAnnotations()
@@ -302,6 +303,69 @@ void tst_GeoJsonImporter::testEmptyFeatureCollection()
     QVector<MapPolygon> polyResult = GeoJsonImporter::parsePolygons(geojson, &ok);
     QVERIFY(ok);
     QVERIFY(polyResult.isEmpty());
+}
+
+void tst_GeoJsonImporter::testAltitudeImport()
+{
+    // Test 1: 3-element coordinates with positive altitude
+    {
+        QByteArray geojson = R"({
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [86.9250, 27.9881, 8849.0]},
+                    "properties": {"id": "everest", "title": "Everest"}
+                }
+            ]
+        })";
+
+        bool ok = false;
+        QVector<MapAnnotation> result = GeoJsonImporter::parseAnnotations(geojson, &ok);
+        QVERIFY(ok);
+        QCOMPARE(result.size(), 1);
+        QCOMPARE(result[0].altitude, 8849.0);
+    }
+
+    // Test 2: 2-element coordinates (backward compat) → altitude defaults to 0.0
+    {
+        QByteArray geojson = R"({
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [116.4074, 39.9042]},
+                    "properties": {"id": "legacy", "title": "Legacy"}
+                }
+            ]
+        })";
+
+        bool ok = false;
+        QVector<MapAnnotation> result = GeoJsonImporter::parseAnnotations(geojson, &ok);
+        QVERIFY(ok);
+        QCOMPARE(result.size(), 1);
+        QCOMPARE(result[0].altitude, 0.0);
+    }
+
+    // Test 3: Negative altitude (Dead Sea)
+    {
+        QByteArray geojson = R"({
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [35.5, 31.5, -430.5]},
+                    "properties": {"id": "deadsea", "title": "Dead Sea"}
+                }
+            ]
+        })";
+
+        bool ok = false;
+        QVector<MapAnnotation> result = GeoJsonImporter::parseAnnotations(geojson, &ok);
+        QVERIFY(ok);
+        QCOMPARE(result.size(), 1);
+        QCOMPARE(result[0].altitude, -430.5);
+    }
 }
 
 QTEST_MAIN(tst_GeoJsonImporter)
