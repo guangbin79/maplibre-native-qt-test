@@ -11,6 +11,7 @@ private slots:
     void testRouteRoundTrip();
     void testPolygonRoundTrip();
     void testMixedDataRoundTrip();
+    void testAltitudeRoundTrip();
 };
 
 void tst_GeoJsonRoundTrip::testAnnotationRoundTrip()
@@ -21,6 +22,7 @@ void tst_GeoJsonRoundTrip::testAnnotationRoundTrip()
     original.longitude = 116.4074;
     original.title = "天安门";
     original.iconName = "marker";
+    original.altitude = 0.0;
 
     QByteArray geojson = GeoJsonExporter::buildAnnotations({original});
 
@@ -34,6 +36,7 @@ void tst_GeoJsonRoundTrip::testAnnotationRoundTrip()
     QCOMPARE(parsed[0].longitude, original.longitude);
     QCOMPARE(parsed[0].title, original.title);
     QCOMPARE(parsed[0].iconName, original.iconName);
+    QCOMPARE(parsed[0].altitude, original.altitude);
 }
 
 void tst_GeoJsonRoundTrip::testRouteRoundTrip()
@@ -187,6 +190,60 @@ void tst_GeoJsonRoundTrip::testMixedDataRoundTrip()
     QCOMPARE(parsedPoly[0].strokeWidth, poly.strokeWidth);
     QCOMPARE(parsedPoly[0].strokeDashed, poly.strokeDashed);
     QCOMPARE(parsedPoly[0].title, poly.title);
+}
+
+void tst_GeoJsonRoundTrip::testAltitudeRoundTrip()
+{
+    // Test 1: altitude=8849.0 (Mt. Everest)
+    {
+        MapAnnotation original;
+        original.id = "everest-roundtrip";
+        original.latitude = 27.9881;
+        original.longitude = 86.9250;
+        original.altitude = 8849.0;
+
+        QByteArray geojson = GeoJsonExporter::buildAnnotations({original});
+        bool ok = false;
+        QVector<MapAnnotation> parsed = GeoJsonImporter::parseAnnotations(geojson, &ok);
+
+        QVERIFY(ok);
+        QCOMPARE(parsed.size(), 1);
+        QCOMPARE(parsed[0].altitude, 8849.0);
+    }
+
+    // Test 2: altitude=0.0 (sea level)
+    {
+        MapAnnotation original;
+        original.id = "sealevel-roundtrip";
+        original.latitude = 0.0;
+        original.longitude = 0.0;
+        original.altitude = 0.0;
+
+        QByteArray geojson = GeoJsonExporter::buildAnnotations({original});
+        bool ok = false;
+        QVector<MapAnnotation> parsed = GeoJsonImporter::parseAnnotations(geojson, &ok);
+
+        QVERIFY(ok);
+        QCOMPARE(parsed.size(), 1);
+        QCOMPARE(parsed[0].altitude, 0.0);
+    }
+
+    // Test 3: altitude=-430.5 (Dead Sea)
+    {
+        MapAnnotation original;
+        original.id = "deadsea-roundtrip";
+        original.latitude = 31.5;
+        original.longitude = 35.5;
+        original.altitude = -430.5;
+
+        QByteArray geojson = GeoJsonExporter::buildAnnotations({original});
+        bool ok = false;
+        QVector<MapAnnotation> parsed = GeoJsonImporter::parseAnnotations(geojson, &ok);
+
+        QVERIFY(ok);
+        QCOMPARE(parsed.size(), 1);
+        QCOMPARE(parsed[0].altitude, -430.5);
+    }
 }
 
 QTEST_MAIN(tst_GeoJsonRoundTrip)
