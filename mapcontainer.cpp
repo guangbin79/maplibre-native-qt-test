@@ -230,7 +230,7 @@ bool MapContainer::event(QEvent *event) {
             if (timeDelta > 0 && timeDelta < DOUBLE_TAP_INTERVAL_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
                 m_doubleTapAnimCenter = pos;
                 double targetZoom = qMin(map()->zoom() + 1.0, MAX_ZOOM);
-                QMapLibre::Coordinate center = map()->coordinate();
+                QMapLibre::Coordinate center = screenToCoordinate(pos);
                 animateTo(center.first, center.second, targetZoom, map()->bearing(), map()->pitch(), 160);
                 m_touchActive = false;
                 event->accept();
@@ -498,7 +498,8 @@ bool MapContainer::event(QEvent *event) {
                     // 检测到双指点击 → 缩小 1 级
                     double targetZoom = qMax(map()->zoom() - 1.0, 0.0);
                     if (targetZoom < map()->zoom()) {
-                        QMapLibre::Coordinate center = map()->coordinate();
+                        QPointF centerPos = (m_twoFingerTapStartPos1 + m_twoFingerTapStartPos2) / 2.0;
+                        QMapLibre::Coordinate center = screenToCoordinate(centerPos);
                         animateTo(center.first, center.second, targetZoom, map()->bearing(), map()->pitch(), 160);
                     }
                     // 防止手指抬起触发单指双击放大（交叉触发防护）
