@@ -2,7 +2,9 @@
 #include <QSignalSpy>
 #include "locationindicatormanager.h"
 
+Q_DECLARE_METATYPE(LocationIndicatorManager::LocationData)
 Q_DECLARE_METATYPE(LocationIndicatorManager::LocationMode)
+Q_DECLARE_METATYPE(LocationIndicatorManager::FixedHeadingMode)
 
 class TestLocationIndicatorManager : public QObject {
     Q_OBJECT
@@ -10,30 +12,49 @@ class TestLocationIndicatorManager : public QObject {
 private slots:
     void init();
     void cleanup();
+
+    // Group 1: Initial state & data storage
     void testInitialState();
-    void testSetLocationFree();
-    void testSetLocationIcon();
-    void testShowHideLocation();
-    void testSetMode();
-    void testSetCenterOffset();
-    void testMapNotReady();
-    void testMapReadyReset();
-    void testSetLocationIconBeforeMapReady();
-    void testSwitchFreeToFixed();
-    void testSwitchFixedToFree();
-    void testFixedModeSetLocation();
-    void testFreeModeSetLocation();
-    void testSetOverlayWidget();
-    void testModeSwitchReset();
-    void testSetLocationBearingDefault();
-    void testSetLocationBearing();
-    void testSetLocationZoom();
-    void testSetLocationPitch();
-    void testSetLocationAllParams();
-    void testSetLocationSentinelNotApplied();
+    void testDefaultLocation();
+    void testSetLocationBasic();
+    void testSetLocationWithHeading();
+    void testSetLocationWithSpeed();
+    void testSetLocationWithAllFields();
+    void testSetLocationWithoutHeading();
+    void testSetLocationWithoutSpeed();
+    void testSetLocationNegativeCoords();
+
+    // Group 2: locationChanged signal
     void testLocationChangedEmitted();
     void testLocationChangedNotEmittedSameCoords();
-    void testLocationChangedCarriesAllParams();
+    void testLocationChangedMultipleCalls();
+    void testLocationChangedOnlyHeadingChange();
+    void testLocationChangedOnlySpeedChange();
+    void testLocationChangedSignalDataIntegrity();
+
+    // Group 3: Visibility
+    void testShowHideLocation();
+    void testShowLocationIdempotent();
+    void testHideLocationIdempotent();
+    void testHideWhenAlreadyHiddenNoCrash();
+
+    // Group 4: Mode switching
+    void testSetMode();
+    void testSetModeIdempotent();
+    void testModeSwitchFreeToFixedWhileVisible();
+    void testModeSwitchFixedToFreeWhileVisible();
+    void testModeSwitchWhenHidden();
+
+    // Group 5: Heading mode, offset, icon, signals
+    void testSetFixedHeadingMode();
+    void testSetFixedHeadingModeIdempotent();
+    void testSetFixedHeadingModeBeforeSetMode();
+    void testSetCenterOffset();
+    void testSetCenterOffsetMultiple();
+    void testSetCenterOffsetNegative();
+    void testSetLocationIconNoCrash();
+    void testFollowingPausedChangedNotEmittedSpuriously();
+    void testFollowingPausedChangedNotEmittedInFreeMode();
 
 private:
     LocationIndicatorManager* mgr = nullptr;
@@ -50,41 +71,276 @@ void TestLocationIndicatorManager::cleanup()
     mgr = nullptr;
 }
 
+// ===========================================================================
+// Group 1: Initial state & data storage (9 tests)
+// ===========================================================================
+
 void TestLocationIndicatorManager::testInitialState()
 {
     QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
     QCOMPARE(mgr->isLocationVisible(), false);
     QCOMPARE(mgr->centerOffset(), 0);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::HeadingUp);
 }
 
-void TestLocationIndicatorManager::testSetLocationFree()
+void TestLocationIndicatorManager::testDefaultLocation()
 {
-    mgr->setLocation(39.9, 116.4);
-    // No crash with nullptr map
+    const auto& loc = mgr->location();
+    QCOMPARE(loc.latitude, 0.0);
+    QCOMPARE(loc.longitude, 0.0);
+    QVERIFY(!loc.heading.has_value());
+    QVERIFY(!loc.speed.has_value());
 }
 
-void TestLocationIndicatorManager::testSetLocationIcon()
+void TestLocationIndicatorManager::testSetLocationBasic()
 {
-    mgr->setLocationIcon(QImage(32, 32, QImage::Format_ARGB32));
-    // No crash with nullptr map
+    LocationIndicatorManager::LocationData data{39.9, 116.4};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QCOMPARE(loc.latitude, 39.9);
+    QCOMPARE(loc.longitude, 116.4);
 }
+
+void TestLocationIndicatorManager::testSetLocationWithHeading()
+{
+    LocationIndicatorManager::LocationData data{39.9, 116.4, 90.0};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QCOMPARE(loc.latitude, 39.9);
+    QCOMPARE(loc.longitude, 116.4);
+    QVERIFY(loc.heading.has_value());
+    QCOMPARE(loc.heading.value(), 90.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationWithSpeed()
+{
+    LocationIndicatorManager::LocationData data{39.9, 116.4, std::nullopt, 10.0};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QCOMPARE(loc.latitude, 39.9);
+    QCOMPARE(loc.longitude, 116.4);
+    QVERIFY(loc.speed.has_value());
+    QCOMPARE(loc.speed.value(), 10.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationWithAllFields()
+{
+    LocationIndicatorManager::LocationData data{39.9, 116.4, 90.0, 10.0};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QCOMPARE(loc.latitude, 39.9);
+    QCOMPARE(loc.longitude, 116.4);
+    QVERIFY(loc.heading.has_value());
+    QCOMPARE(loc.heading.value(), 90.0);
+    QVERIFY(loc.speed.has_value());
+    QCOMPARE(loc.speed.value(), 10.0);
+}
+
+void TestLocationIndicatorManager::testSetLocationWithoutHeading()
+{
+    LocationIndicatorManager::LocationData data{39.9, 116.4};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QVERIFY(!loc.heading.has_value());
+}
+
+void TestLocationIndicatorManager::testSetLocationWithoutSpeed()
+{
+    LocationIndicatorManager::LocationData data{39.9, 116.4, 90.0};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QVERIFY(loc.heading.has_value());
+    QVERIFY(!loc.speed.has_value());
+}
+
+void TestLocationIndicatorManager::testSetLocationNegativeCoords()
+{
+    LocationIndicatorManager::LocationData data{-33.8688, 151.2093};
+    mgr->setLocation(data);
+    const auto& loc = mgr->location();
+    QCOMPARE(loc.latitude, -33.8688);
+    QCOMPARE(loc.longitude, 151.2093);
+}
+
+// ===========================================================================
+// Group 2: locationChanged signal (6 tests)
+// ===========================================================================
+
+void TestLocationIndicatorManager::testLocationChangedEmitted()
+{
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4});
+    QCOMPARE(spy.count(), 1);
+    auto loc = spy.at(0).at(0).value<LocationIndicatorManager::LocationData>();
+    QCOMPARE(loc.latitude, 39.9);
+    QCOMPARE(loc.longitude, 116.4);
+}
+
+void TestLocationIndicatorManager::testLocationChangedNotEmittedSameCoords()
+{
+    mgr->setLocation({39.9, 116.4, 90.0});
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4, 90.0, 10.0});
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestLocationIndicatorManager::testLocationChangedMultipleCalls()
+{
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4});
+    mgr->setLocation({40.0, 116.4});
+    mgr->setLocation({40.0, 116.5});
+    QCOMPARE(spy.count(), 3);
+}
+
+void TestLocationIndicatorManager::testLocationChangedOnlyHeadingChange()
+{
+    mgr->setLocation({39.9, 116.4, 90.0});
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4, 180.0});
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestLocationIndicatorManager::testLocationChangedOnlySpeedChange()
+{
+    mgr->setLocation({39.9, 116.4, std::nullopt, 10.0});
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4, std::nullopt, 20.0});
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestLocationIndicatorManager::testLocationChangedSignalDataIntegrity()
+{
+    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4, 90.0, 10.0});
+    QCOMPARE(spy.count(), 1);
+    auto loc = spy.at(0).at(0).value<LocationIndicatorManager::LocationData>();
+    QCOMPARE(loc.latitude, 39.9);
+    QCOMPARE(loc.longitude, 116.4);
+    QVERIFY(loc.heading.has_value());
+    QCOMPARE(loc.heading.value(), 90.0);
+    QVERIFY(loc.speed.has_value());
+    QCOMPARE(loc.speed.value(), 10.0);
+}
+
+// ===========================================================================
+// Group 3: Visibility (4 tests)
+// ===========================================================================
 
 void TestLocationIndicatorManager::testShowHideLocation()
 {
     mgr->showLocation();
-    QCOMPARE(mgr->isLocationVisible(), true);
-
+    QVERIFY(mgr->isLocationVisible());
     mgr->hideLocation();
-    QCOMPARE(mgr->isLocationVisible(), false);
+    QVERIFY(!mgr->isLocationVisible());
 }
+
+void TestLocationIndicatorManager::testShowLocationIdempotent()
+{
+    mgr->showLocation();
+    QVERIFY(mgr->isLocationVisible());
+    mgr->showLocation();
+    QVERIFY(mgr->isLocationVisible());
+}
+
+void TestLocationIndicatorManager::testHideLocationIdempotent()
+{
+    mgr->hideLocation();
+    QVERIFY(!mgr->isLocationVisible());
+    mgr->hideLocation();
+    QVERIFY(!mgr->isLocationVisible());
+}
+
+void TestLocationIndicatorManager::testHideWhenAlreadyHiddenNoCrash()
+{
+    QVERIFY(!mgr->isLocationVisible());
+    mgr->hideLocation();
+    QVERIFY(!mgr->isLocationVisible());
+}
+
+// ===========================================================================
+// Group 4: Mode switching (5 tests)
+// ===========================================================================
 
 void TestLocationIndicatorManager::testSetMode()
 {
     mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
     QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Fixed);
-
     mgr->setMode(LocationIndicatorManager::LocationMode::Free);
     QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
+}
+
+void TestLocationIndicatorManager::testSetModeIdempotent()
+{
+    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
+    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Fixed);
+}
+
+void TestLocationIndicatorManager::testModeSwitchFreeToFixedWhileVisible()
+{
+    mgr->showLocation();
+    QVERIFY(mgr->isLocationVisible());
+    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    QVERIFY(mgr->isLocationVisible());
+    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Fixed);
+}
+
+void TestLocationIndicatorManager::testModeSwitchFixedToFreeWhileVisible()
+{
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    mgr->showLocation();
+    QVERIFY(mgr->isLocationVisible());
+    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
+    QVERIFY(mgr->isLocationVisible());
+    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
+}
+
+void TestLocationIndicatorManager::testModeSwitchWhenHidden()
+{
+    QVERIFY(!mgr->isLocationVisible());
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    QVERIFY(!mgr->isLocationVisible());
+    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
+    QVERIFY(!mgr->isLocationVisible());
+}
+
+// ===========================================================================
+// Group 5: Heading mode, offset, icon, signals (9 tests)
+// ===========================================================================
+
+void TestLocationIndicatorManager::testSetFixedHeadingMode()
+{
+    mgr->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    mgr->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+}
+
+void TestLocationIndicatorManager::testSetFixedHeadingModeIdempotent()
+{
+    mgr->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    mgr->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    mgr->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::NorthUp);
+}
+
+void TestLocationIndicatorManager::testSetFixedHeadingModeBeforeSetMode()
+{
+    mgr->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    QCOMPARE(mgr->fixedHeadingMode(), LocationIndicatorManager::FixedHeadingMode::NorthUp);
 }
 
 void TestLocationIndicatorManager::testSetCenterOffset()
@@ -93,183 +349,48 @@ void TestLocationIndicatorManager::testSetCenterOffset()
     QCOMPARE(mgr->centerOffset(), 200);
 }
 
-void TestLocationIndicatorManager::testMapNotReady()
+void TestLocationIndicatorManager::testSetCenterOffsetMultiple()
 {
-    // All operations should not crash with nullptr map and not ready
-    mgr->setLocation(39.9, 116.4);
-    mgr->setLocationIcon(QImage(32, 32, QImage::Format_ARGB32));
-    mgr->showLocation();
-    mgr->hideLocation();
-    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
     mgr->setCenterOffset(100);
+    QCOMPARE(mgr->centerOffset(), 100);
+    mgr->setCenterOffset(300);
+    QCOMPARE(mgr->centerOffset(), 300);
+    mgr->setCenterOffset(0);
+    QCOMPARE(mgr->centerOffset(), 0);
 }
 
-void TestLocationIndicatorManager::testMapReadyReset()
+void TestLocationIndicatorManager::testSetCenterOffsetNegative()
 {
-    mgr->setMapReady(false);
-    mgr->setMapReady(true);
-    // No crash
+    mgr->setCenterOffset(-50);
+    QCOMPARE(mgr->centerOffset(), -50);
 }
 
-void TestLocationIndicatorManager::testSetLocationIconBeforeMapReady()
+void TestLocationIndicatorManager::testSetLocationIconNoCrash()
 {
     mgr->setLocationIcon(QImage(32, 32, QImage::Format_ARGB32));
-    mgr->showLocation();
-    QCOMPARE(mgr->isLocationVisible(), true);
 }
 
-void TestLocationIndicatorManager::testSwitchFreeToFixed()
+void TestLocationIndicatorManager::testFollowingPausedChangedNotEmittedSpuriously()
 {
-    // Default is Free; switch to Fixed with nullptr map — no crash
-    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
-    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Fixed);
-}
-
-void TestLocationIndicatorManager::testSwitchFixedToFree()
-{
-    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
-    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
-    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
-}
-
-void TestLocationIndicatorManager::testFixedModeSetLocation()
-{
-    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
-    mgr->setMapReady(true);
-    mgr->showLocation();
-    mgr->setLocation(39.9, 116.4);
-    // No crash with nullptr map
-}
-
-void TestLocationIndicatorManager::testFreeModeSetLocation()
-{
-    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
-    mgr->setMapReady(true);
-    mgr->showLocation();
-    mgr->setLocation(39.9, 116.4);
-    // No crash with nullptr map
-}
-
-void TestLocationIndicatorManager::testSetOverlayWidget()
-{
-    QWidget w;
-    mgr->setOverlayWidget(&w);
-    // No crash — overlay stored
-}
-
-void TestLocationIndicatorManager::testModeSwitchReset()
-{
-    // Free → Fixed → Free — verify final mode and no crash
-    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
-    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Fixed);
-    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
-    QCOMPARE(mgr->mode(), LocationIndicatorManager::LocationMode::Free);
-    mgr->setLocation(39.9, 116.4);
+    QSignalSpy spy(mgr, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+    mgr->setLocation({39.9, 116.4});
     mgr->showLocation();
     mgr->hideLocation();
-}
-
-void TestLocationIndicatorManager::testSetLocationBearingDefault()
-{
-    QCOMPARE(mgr->bearing(), -1.0);
-    QCOMPARE(mgr->zoom(), -1.0);
-    QCOMPARE(mgr->pitch(), -1.0);
-
-    mgr->setLocation(39.9, 116.4);
-    QCOMPARE(mgr->bearing(), -1.0);
-    QCOMPARE(mgr->zoom(), -1.0);
-    QCOMPARE(mgr->pitch(), -1.0);
-}
-
-void TestLocationIndicatorManager::testSetLocationBearing()
-{
-    mgr->setLocation(39.9, 116.4, 90.0);
-    QCOMPARE(mgr->bearing(), 90.0);
-
-    mgr->setLocation(39.9, 116.4, 0.0);
-    QCOMPARE(mgr->bearing(), 0.0);
-
-    mgr->setLocation(39.9, 116.4, -1.0);
-    QCOMPARE(mgr->bearing(), -1.0);
-}
-
-void TestLocationIndicatorManager::testSetLocationZoom()
-{
-    mgr->setLocation(39.9, 116.4, -1.0, 15.0);
-    QCOMPARE(mgr->zoom(), 15.0);
-
-    mgr->setLocation(39.9, 116.4, -1.0, 0.0);
-    QCOMPARE(mgr->zoom(), 0.0);
-
-    mgr->setLocation(39.9, 116.4, -1.0, -1.0);
-    QCOMPARE(mgr->zoom(), -1.0);
-}
-
-void TestLocationIndicatorManager::testSetLocationPitch()
-{
-    mgr->setLocation(39.9, 116.4, -1.0, -1.0, 45.0);
-    QCOMPARE(mgr->pitch(), 45.0);
-
-    mgr->setLocation(39.9, 116.4, -1.0, -1.0, 0.0);
-    QCOMPARE(mgr->pitch(), 0.0);
-
-    mgr->setLocation(39.9, 116.4, -1.0, -1.0, -1.0);
-    QCOMPARE(mgr->pitch(), -1.0);
-}
-
-void TestLocationIndicatorManager::testSetLocationAllParams()
-{
-    mgr->setLocation(39.9, 116.4, 180.0, 16.0, 30.0);
-    QCOMPARE(mgr->bearing(), 180.0);
-    QCOMPARE(mgr->zoom(), 16.0);
-    QCOMPARE(mgr->pitch(), 30.0);
-}
-
-void TestLocationIndicatorManager::testSetLocationSentinelNotApplied()
-{
-    mgr->setLocation(39.9, 116.4, 90.0, 15.0, 45.0);
-    QCOMPARE(mgr->bearing(), 90.0);
-    QCOMPARE(mgr->zoom(), 15.0);
-    QCOMPARE(mgr->pitch(), 45.0);
-
-    mgr->setLocation(39.9, 116.4);
-    QCOMPARE(mgr->bearing(), -1.0);
-    QCOMPARE(mgr->zoom(), -1.0);
-    QCOMPARE(mgr->pitch(), -1.0);
-}
-
-void TestLocationIndicatorManager::testLocationChangedEmitted()
-{
-    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
-    mgr->setLocation(39.9, 116.4);
-    QCOMPARE(spy.count(), 1);
-    QList<QVariant> args = spy.at(0);
-    QCOMPARE(args.at(0).toDouble(), 39.9);
-    QCOMPARE(args.at(1).toDouble(), 116.4);
-    QCOMPARE(args.at(2).toDouble(), -1.0);
-    QCOMPARE(args.at(3).toDouble(), -1.0);
-    QCOMPARE(args.at(4).toDouble(), -1.0);
-}
-
-void TestLocationIndicatorManager::testLocationChangedNotEmittedSameCoords()
-{
-    mgr->setLocation(39.9, 116.4);
-    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
-    mgr->setLocation(39.9, 116.4);
+    mgr->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    mgr->setMode(LocationIndicatorManager::LocationMode::Free);
     QCOMPARE(spy.count(), 0);
 }
 
-void TestLocationIndicatorManager::testLocationChangedCarriesAllParams()
+void TestLocationIndicatorManager::testFollowingPausedChangedNotEmittedInFreeMode()
 {
-    QSignalSpy spy(mgr, &LocationIndicatorManager::locationChanged);
-    mgr->setLocation(31.2, 121.5, 90.0, 15.0, 45.0);
-    QCOMPARE(spy.count(), 1);
-    QList<QVariant> args = spy.at(0);
-    QCOMPARE(args.at(0).toDouble(), 31.2);
-    QCOMPARE(args.at(1).toDouble(), 121.5);
-    QCOMPARE(args.at(2).toDouble(), 90.0);
-    QCOMPARE(args.at(3).toDouble(), 15.0);
-    QCOMPARE(args.at(4).toDouble(), 45.0);
+    QSignalSpy spy(mgr, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+    mgr->showLocation();
+    mgr->setLocation({39.9, 116.4});
+    mgr->setLocation({40.0, 116.5});
+    mgr->hideLocation();
+    QCOMPARE(spy.count(), 0);
 }
 
 QTEST_MAIN(TestLocationIndicatorManager)

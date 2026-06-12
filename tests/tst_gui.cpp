@@ -45,6 +45,9 @@ private slots:
     void testGeoJsonExport();
     void testGeoJsonImport();
     void testLayerZOrder();
+    void testLocationHeadingUp();
+    void testLocationNorthUp();
+    void testLocationSimulatedNavigation();
 
 private:
     MainWindow *m_window = nullptr;
@@ -61,7 +64,7 @@ private:
 void GuiTest::initTestCase()
 {
     log("initTestCase: starting HXGISServer");
-    QString rootPath = "/home/guangbin/Documents/untitled/build/linux-x86_64/map_data";
+    QString rootPath = "/home/guangbin/Documents/maplibre-native-qt-test/build/linux-x86_64/map_data";
     g_server = new HXGISServer("127.0.0.1:4943", rootPath.toUtf8().constData());
     QVERIFY2(g_server->isRunning(), "Failed to start HXGISServer");
     log(QStringLiteral("HXGISServer started, version: %1").arg(g_server->version()));
@@ -961,6 +964,170 @@ void GuiTest::testLayerZOrder()
         QStringLiteral("After clear+re-set: routes-solid (%1) should be below annotations-layer (%2)").arg(routesSolidIdx2).arg(annotationsIdx2).toUtf8());
 
     log("testLayerZOrder: PASSED - layer z-order is deterministic");
+}
+
+void GuiTest::testLocationHeadingUp()
+{
+    log("testLocationHeadingUp: Fixed mode with HeadingUp");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_map->setLocationIcon(icon);
+
+    // Setup Fixed + HeadingUp
+    m_map->setLocation(36.75, 3.05);
+    m_map->showLocation();
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_map->setCenterOffset(200);
+    m_map->setFixedTouchPanEnabled(true);
+    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedHeadingMode(
+        LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    QTest::qWait(2000);
+    captureScreenshot("40_heading_up_initial");
+
+    // Set heading to 90 degrees - map should rotate, icon stays vertical
+    m_map->setLocation(36.75, 3.05, 90.0, 15.0, 45.0);
+    QTest::qWait(2000);
+    captureScreenshot("41_heading_up_90deg");
+
+    double bearing = m_map->map()->bearing();
+    log(QStringLiteral("Bearing after heading=90: %1").arg(bearing));
+    QVERIFY2(qAbs(bearing - 90.0) < 10.0,
+             QStringLiteral("Bearing should be ~90 in HeadingUp, got %1").arg(bearing).toUtf8());
+
+    // Set heading to 180 degrees
+    m_map->setLocation(36.75, 3.05, 180.0, 15.0, 45.0);
+    QTest::qWait(2000);
+    captureScreenshot("42_heading_up_180deg");
+
+    bearing = m_map->map()->bearing();
+    log(QStringLiteral("Bearing after heading=180: %1").arg(bearing));
+    QVERIFY2(qAbs(bearing - 180.0) < 10.0 || qAbs(bearing + 180.0) < 10.0,
+             QStringLiteral("Bearing should be ~180 in HeadingUp, got %1").arg(bearing).toUtf8());
+
+    // Cleanup
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+    m_map->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testLocationNorthUp()
+{
+    log("testLocationNorthUp: Fixed mode with NorthUp");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_map->setLocationIcon(icon);
+
+    // Setup Fixed + NorthUp
+    m_map->setLocation(36.75, 3.05);
+    m_map->showLocation();
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_map->setCenterOffset(200);
+    m_map->setFixedTouchPanEnabled(true);
+    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedHeadingMode(
+        LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QTest::qWait(2000);
+    captureScreenshot("43_north_up_initial");
+
+    // In NorthUp, map bearing should NOT change when heading changes
+    double bearingBefore = m_map->map()->bearing();
+    log(QStringLiteral("Bearing before heading change: %1").arg(bearingBefore));
+
+    // Set heading to 90 degrees - map should NOT rotate, icon should rotate
+    // IMPORTANT: Use m_map->setLocation() to update follow targets
+    m_map->setLocation(36.75, 3.05, 90.0, -1, -1);
+    QTest::qWait(2000);
+    captureScreenshot("44_north_up_heading_90");
+
+    double bearingAfter = m_map->map()->bearing();
+    log(QStringLiteral("Bearing after heading=90 in NorthUp: %1").arg(bearingAfter));
+    QVERIFY2(qAbs(bearingAfter - bearingBefore) < 5.0,
+             QStringLiteral("Bearing should NOT change in NorthUp mode, before=%1 after=%2")
+                 .arg(bearingBefore).arg(bearingAfter).toUtf8());
+
+    // Set heading to 270 degrees
+    m_map->setLocation(36.75, 3.05, 270.0, -1, -1);
+    QTest::qWait(2000);
+    captureScreenshot("45_north_up_heading_270");
+
+    bearingAfter = m_map->map()->bearing();
+    log(QStringLiteral("Bearing after heading=270 in NorthUp: %1").arg(bearingAfter));
+    QVERIFY2(qAbs(bearingAfter - bearingBefore) < 5.0,
+             QStringLiteral("Bearing should still NOT change in NorthUp, before=%1 after=%2")
+                 .arg(bearingBefore).arg(bearingAfter).toUtf8());
+
+    // Cleanup
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+    m_map->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testLocationSimulatedNavigation()
+{
+    log("testLocationSimulatedNavigation: simulating GPS movement");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_map->setLocationIcon(icon);
+
+    // Setup Fixed + HeadingUp
+    m_map->setLocation(36.75, 3.05);
+    m_map->showLocation();
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_map->setCenterOffset(200);
+    m_map->setFixedTouchPanEnabled(true);
+    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedHeadingMode(
+        LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    QTest::qWait(2000);
+    captureScreenshot("46_simnav_start");
+
+    // Simulate 10 GPS updates moving northeast with changing heading
+    double lat = 36.75;
+    double lon = 3.05;
+    double heading = 45.0;
+
+    for (int i = 0; i < 10; ++i) {
+        lat += 0.001;
+        lon += 0.0008;
+        heading += 15.0;
+        if (heading >= 360.0) heading -= 360.0;
+        // CRITICAL: Use m_map->setLocation() to update follow timer targets
+        m_map->setLocation(lat, lon, heading, -1, -1);
+        QTest::qWait(500);
+    }
+
+    captureScreenshot("47_simnav_after_10_updates");
+
+    // Verify final position
+    auto finalCoord = m_map->map()->coordinate();
+    log(QStringLiteral("Final position: lat=%1 lon=%2").arg(finalCoord.first).arg(finalCoord.second));
+    QVERIFY2(qAbs(finalCoord.first - (36.75 + 0.01)) < 0.01,
+             QStringLiteral("Final lat should be near 36.76, got %1").arg(finalCoord.first).toUtf8());
+
+    // Now switch to NorthUp and do more updates
+    m_map->locationIndicatorManager()->setFixedHeadingMode(
+        LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QTest::qWait(1000);
+
+    for (int i = 0; i < 5; ++i) {
+        lat += 0.001;
+        lon += 0.0008;
+        heading += 30.0;
+        if (heading >= 360.0) heading -= 360.0;
+        m_map->setLocation(lat, lon, heading, -1, -1);
+        QTest::qWait(500);
+    }
+
+    captureScreenshot("48_simnav_northup_after_5");
+
+    // Cleanup
+    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+    m_map->hideLocation();
+    QTest::qWait(500);
 }
 
 QTEST_MAIN(GuiTest)
