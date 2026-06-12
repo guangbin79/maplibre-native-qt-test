@@ -156,6 +156,7 @@ private:
     QImage createTestIcon(const QColor &color);
 
     MapContainer *m_mapContainer;
+    LocationIndicatorManager* m_locationIndicatorManager = nullptr;
     bool m_running = false;
     TestStep m_currentStep = Step_Idle;
     int m_stepDelayMs = 1500;  // 每步之间的延迟（毫秒）

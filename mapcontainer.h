@@ -35,8 +35,8 @@
 #include "routemanager.h"
 #include "mappolygon.h"
 #include "polygonmanager.h"
-#include "locationindicatormanager.h"
 #include "cameraanimationmath.h"
+
 
 namespace QMapLibre {
 class GLWidget;
@@ -205,8 +205,6 @@ public:
     /** @brief 获取多边形管理器 @see PolygonManager */
     PolygonManager* polygonManager() const { return m_polygonManager; }
 
-    /** @brief 获取位置指示器管理器 @see LocationIndicatorManager */
-    LocationIndicatorManager* locationIndicatorManager() const { return m_locationIndicatorManager; }
 
     /**
      * @brief 设置地图样式
@@ -802,191 +800,12 @@ public:
      */
     QVector<MapPolygon> polygons() const;
 
-    // ===== 位置指示器接口 =====
+    // ===== setUserInteractionEnabled() =====
 
-    /**
-     * @brief 设置当前位置坐标
-     *
-     * 更新位置指示器的 GPS 坐标。
-     * - Free 模式：图标在地图上移到新坐标
-     * - Fixed 模式：地图平移使该坐标对准屏幕固定点
-     *
-     * @param lat 纬度 [-90, 90]
-     * @param lon 经度 [-180, 180]
-     * @param bearing 地图方向（度），-1 表示不改变
-     * @param zoom 缩放级别，-1 表示不改变
-     * @param pitch 倾斜角度（度），-1 表示不改变
-     *
-     * @see setLocationMode(), showLocation()
-     */
-    void setLocation(double lat, double lon, double bearing = -1.0, double zoom = -1.0, double pitch = -1.0);
-
-    /**
-     * @brief 设置位置指示器图标
-     *
-     * @param icon 图标图片，建议使用正方形 PNG（带透明通道）
-     *
-     * @code
-     * mapContainer->setLocationIcon(QImage(":/icons/location_arrow.png"));
-     * @endcode
-     */
-    void setLocationIcon(const QImage& icon);
-
-    /**
-     * @brief 设置位置指示器旋转角度
-     *
-     * 旋转图标，用于导航场景指示行进方向。
-     * - Free 模式：通过 MapLibre icon-rotate 属性旋转
-     * - Fixed 模式：通过 QTransform 旋转 overlay 图标
-     *
-     * @param degrees 旋转角度（度），0 表示图标朝上（北），顺时针增加
-     *
-     * @code
-     * // 设置图标指向东方（90度）
-     * mapContainer->setLocationRotation(90.0);
-     *
-     * // 根据 GPS 方向旋转
-     * mapContainer->setLocationRotation(gpsCourse);
-     * @endcode
-     *
-     * @see setLocationIcon(), locationRotation()
-     */
-    void setLocationRotation(double degrees);
-
-    /**
-     * @brief 获取当前位置指示器旋转角度
-     * @return 当前旋转角度（度）
-     * @see setLocationRotation()
-     */
-    double locationRotation() const;
-
-    /**
-     * @brief 设置位置指示器模式
-     *
-     * - Free：图标渲染在地图坐标上，随地图移动（浏览模式）
-     * - Fixed：图标固定在屏幕位置，地图跟随移动（导航模式）
-     *
-     * @param mode LocationMode::Free 或 LocationMode::Fixed
-     *
-     * @code
-     * // 切换到导航模式
-     * mapContainer->setLocationMode(LocationIndicatorManager::Fixed);
-     * // 切回浏览模式
-     * mapContainer->setLocationMode(LocationIndicatorManager::Free);
-     * @endcode
-     *
-     * @see LocationIndicatorManager::LocationMode
-     */
-    void setLocationMode(LocationIndicatorManager::LocationMode mode);
-
-    /**
-     * @brief 获取当前位置指示器模式
-     * @return 当前 LocationMode
-     * @see setLocationMode()
-     */
-    LocationIndicatorManager::LocationMode locationMode() const;
-
-    /**
-     * @brief 显示位置指示器
-     * @see hideLocation(), isLocationVisible()
-     */
-    void showLocation();
-
-    /**
-     * @brief 隐藏位置指示器
-     * @see showLocation(), isLocationVisible()
-     */
-    void hideLocation();
-
-    /**
-     * @brief 查询位置指示器是否可见
-     * @return true 可见，false 隐藏
-     */
-    bool isLocationVisible() const;
-
-    /**
-     * @brief 设置 Fixed 模式的中心偏移量
-     *
-     * 将地图可视中心从视口正中心向下偏移指定像素数。
-     * 仅 Fixed 模式生效。
-     *
-     * @param bottomPixels 从视口底部向上的偏移像素数（如 200 表示中心在底部上方 200px）
-     *
-     * @code
-     * // 将中心点移到屏幕下方 1/3 位置（假设窗口高度 600px）
-     * mapContainer->setCenterOffset(200);
-     * @endcode
-     *
-     * @see setLocationMode()
-     */
-    void setCenterOffset(int bottomPixels);
-
-    /**
-     * @brief 设置 GPS 跟随的平滑插值因子
-     *
-     * 控制 Fixed 模式下地图跟随 GPS 位置时的平滑速度。
-     * 值越大跟随越快（0.0-1.0），默认 0.15。
-     *
-     * @param factor 插值因子 [0.0, 1.0]
-     * @code
-     * // 模拟导航场景使用较低的因子实现更平滑的跟随
-     * mapContainer->setFollowLerpFactor(0.05);
-     * // 恢复默认
-     * mapContainer->setFollowLerpFactor(0.15);
-     * @endcode
-     */
-    void setFollowLerpFactor(double factor);
-
-    /** @brief 获取当前跟随插值因子 @see setFollowLerpFactor() */
-    double followLerpFactor() const;
-
-    static constexpr double DEFAULT_FOLLOW_LERP_FACTOR =
-        LocationIndicatorManager::DEFAULT_FOLLOW_SMOOTH_FACTOR;
-
-    /**
-     * @brief 设置 Fixed 模式下是否允许触屏滑动地图
-     *
-     * 启用后，Fixed 模式下用户可触屏平移地图，地图跟随暂停；
-     * 松手后经过 setFixedTouchResumeTimeout() 设定的超时时间，
-     * 自动恢复 Fixed 模式并平滑飞回最新 GPS 位置。
-     * 禁用时，Fixed 模式下触屏滑动无效。
-     *
-     * @param enabled true 允许触屏滑动，false 禁止（默认 false）
-     *
-     * @code
-     * mapContainer->setFixedTouchPanEnabled(true);
-     * mapContainer->setFixedTouchResumeTimeout(3000);  // 3 秒后恢复
-     * @endcode
-     *
-     * @see isFixedTouchPanEnabled(), setFixedTouchResumeTimeout()
-     */
-    void setFixedTouchPanEnabled(bool enabled);
-
-    /**
-     * @brief 查询 Fixed 模式下是否允许触屏滑动地图
-     * @return true 允许，false 禁止
-     * @see setFixedTouchPanEnabled()
-     */
-    bool isFixedTouchPanEnabled() const;
-
-    /**
-     * @brief 设置触屏滑动后恢复 Fixed 模式的超时时间
-     *
-     * 用户松手后经过此时间（毫秒），自动从 Free 切回 Fixed 模式，
-     * 并通过 animateTo 平滑飞回最新 GPS 位置。
-     *
-     * @param ms 超时时间（毫秒），默认 3000
-     *
-     * @see fixedTouchResumeTimeout(), setFixedTouchPanEnabled()
-     */
-    void setFixedTouchResumeTimeout(int ms);
-
-    /**
-     * @brief 获取触屏滑动后恢复 Fixed 模式的超时时间
-     * @return 超时时间（毫秒）
-     * @see setFixedTouchResumeTimeout()
-     */
-    int fixedTouchResumeTimeout() const;
+    /** @brief 设置是否允许用户与地图交互 */
+    void setUserInteractionEnabled(bool enabled) { m_userInteractionEnabled = enabled; }
+    /** @brief 查询是否允许用户与地图交互 */
+    bool isUserInteractionEnabled() const { return m_userInteractionEnabled; }
     bool isMapReady() const { return m_mapReady; }
 
 signals:
@@ -1196,6 +1015,9 @@ signals:
     void animationFinished();
     void mapReady();
 
+    void userPanDetected();
+    void userZoomDetected();
+
 protected:
     bool event(QEvent *event) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -1269,16 +1091,14 @@ private:
     double m_animTargetPitch = 0.0;
     int m_defaultAnimDuration = 500;
 
-    bool m_fixedTouchPanEnabled = false;
+    bool m_userInteractionEnabled = true;
 
     void stopCameraAnimation();
 
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;
     PolygonManager* m_polygonManager = nullptr;
-    LocationIndicatorManager* m_locationIndicatorManager = nullptr;
     bool m_mapReady = false;
-    double m_locationRotation = 0.0;
 
     void connectMapSignals();
     void applyLanguageLabels();

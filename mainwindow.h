@@ -3,6 +3,7 @@
 #include <QCheckBox>
 
 class MapContainer;
+class LocationIndicatorManager;
 class ScaleBarWidget;
 class ControlPanelWidget;
 class TestRunner;
@@ -76,6 +77,7 @@ private:
     QCheckBox *m_polygonLayerToggle;
     QCheckBox *m_locationLayerToggle;
 
+    LocationIndicatorManager* m_locationIndicatorManager = nullptr;
     TestRunner *m_testRunner;
     QTextBrowser *m_testLogView;
     TTSPlayer *m_ttsPlayer;

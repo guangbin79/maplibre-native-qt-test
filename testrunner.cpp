@@ -8,6 +8,16 @@ TestRunner::TestRunner(MapContainer *mapContainer, QObject *parent)
     : QObject(parent)
     , m_mapContainer(mapContainer)
 {
+    // Create Manager and wire signals for interaction control
+    m_locationIndicatorManager = new LocationIndicatorManager(m_mapContainer);
+    connect(m_mapContainer, &MapContainer::userPanDetected,
+            m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+    connect(m_mapContainer, &MapContainer::userZoomDetected,
+            m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+    connect(m_mapContainer, &MapContainer::mapReady, this, [this]() {
+        m_locationIndicatorManager->initMap(m_mapContainer->map());
+    });
+
     m_testIcons["marker"] = createTestIcon(QColor(255, 0, 0));
     m_testIcons["pin"] = createTestIcon(QColor(0, 255, 0));
     m_testIcons["star"] = createTestIcon(QColor(0, 0, 255));
@@ -424,7 +434,7 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_SetPosition:
         logTestStart("Location - Set Position");
         {
-            m_mapContainer->setLocation(39.9042, 116.4074);
+            m_locationIndicatorManager->setLocation({39.9042, 116.4074});
             logTestPass("Location set to Beijing");
         }
         nextStep();
@@ -433,9 +443,9 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_Show:
         logTestStart("Location - Show");
         {
-            m_mapContainer->setLocationIcon(createTestIcon(QColor(0, 128, 255)));
-            m_mapContainer->showLocation();
-            if (m_mapContainer->isLocationVisible()) {
+            m_locationIndicatorManager->setLocationIcon(createTestIcon(QColor(0, 128, 255)));
+            m_locationIndicatorManager->showLocation();
+            if (m_locationIndicatorManager->isLocationVisible()) {
                 logTestPass("Location indicator shown");
             } else {
                 logTestFail("Location indicator not visible after show");
@@ -447,8 +457,8 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_Hide:
         logTestStart("Location - Hide");
         {
-            m_mapContainer->hideLocation();
-            if (!m_mapContainer->isLocationVisible()) {
+            m_locationIndicatorManager->hideLocation();
+            if (!m_locationIndicatorManager->isLocationVisible()) {
                 logTestPass("Location indicator hidden");
             } else {
                 logTestFail("Location indicator still visible after hide");
@@ -460,11 +470,11 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_ModeFixed:
         logTestStart("Location - Switch to Fixed Mode");
         {
-            m_mapContainer->showLocation();
-            m_mapContainer->setCenterOffset(200);
-            m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-            m_mapContainer->setLocation(39.9042, 116.4074);
-            if (m_mapContainer->locationMode() == LocationIndicatorManager::LocationMode::Fixed) {
+            m_locationIndicatorManager->showLocation();
+            m_locationIndicatorManager->setCenterOffset(200);
+            m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+            m_locationIndicatorManager->setLocation({39.9042, 116.4074});
+            if (m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed) {
                 logTestPass("Switched to Fixed mode");
             } else {
                 logTestFail("Failed to switch to Fixed mode");
@@ -476,8 +486,8 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_ModeFree:
         logTestStart("Location - Switch to Free Mode");
         {
-            m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Free);
-            if (m_mapContainer->locationMode() == LocationIndicatorManager::LocationMode::Free) {
+            m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+            if (m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Free) {
                 logTestPass("Switched to Free mode");
             } else {
                 logTestFail("Failed to switch to Free mode");
@@ -489,11 +499,13 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_Rotation:
         logTestStart("Location - Set Rotation");
         {
-            m_mapContainer->setLocationRotation(45.0);
-            if (qFuzzyCompare(m_mapContainer->locationRotation(), 45.0)) {
+            auto loc = m_locationIndicatorManager->location();
+            m_locationIndicatorManager->setLocation({loc.latitude, loc.longitude, 45.0});
+            double rot = m_locationIndicatorManager->location().heading.value_or(0.0);
+            if (qFuzzyCompare(rot, 45.0)) {
                 logTestPass("Rotation set to 45 degrees");
             } else {
-                logTestFail(QStringLiteral("Rotation mismatch: %1").arg(m_mapContainer->locationRotation()));
+                logTestFail(QStringLiteral("Rotation mismatch: %1").arg(rot));
             }
         }
         nextStep();
@@ -502,7 +514,7 @@ void TestRunner::executeStep(TestStep step)
     case Step_Location_CenterOffset:
         logTestStart("Location - Center Offset");
         {
-            m_mapContainer->setCenterOffset(300);
+            m_locationIndicatorManager->setCenterOffset(300);
             logTestPass("Center offset set to 300px");
         }
         nextStep();

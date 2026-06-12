@@ -30,6 +30,7 @@
 #include <optional>
 
 namespace QMapLibre { class Map; }
+class MapContainer;
 
 /**
  * @brief 位置指示器管理器
@@ -55,8 +56,6 @@ namespace QMapLibre { class Map; }
  */
 class LocationIndicatorManager : public QObject {
     Q_OBJECT
-    friend class MapContainer;
-
 public:
     /**
      * @brief 位置指示器显示模式
@@ -84,7 +83,8 @@ public:
      *   4. Fixed 下，驶入驶出路口，地图比例尺缩放
      * @param parent 父对象，用于 Qt 对象树内存管理
      */
-    explicit LocationIndicatorManager(QMapLibre::Map* map, QObject* parent = nullptr);
+    explicit LocationIndicatorManager(MapContainer* container);
+    void initMap(QMapLibre::Map* map);
 
     struct LocationData {
         double latitude;
@@ -258,6 +258,7 @@ private:
      */
     State state() const;
 
+    void updateInteractionEnabled();
     void ensureLayerSetup();
     void rebuildSource();
     QByteArray buildGeoJson() const;
@@ -310,6 +311,7 @@ protected:
     // Overlay widget for Fixed mode (screen-pinned icon)
     QLabel *m_overlay = nullptr;
     QWidget *m_parentWidget = nullptr;
+    MapContainer* m_mapContainer = nullptr;
 };
 
 #endif

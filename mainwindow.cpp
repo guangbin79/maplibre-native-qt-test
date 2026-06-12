@@ -126,8 +126,16 @@ MainWindow::MainWindow(QWidget *parent)
     // 启用 Fixed 模式下的触摸平移暂停功能：
     // 用户在 Fixed 模式下单指拖动地图时，自动暂停 Fixed 跟随（切换到 Free 显示），
     // 松手后经过超时时间自动恢复 Fixed 模式。
-    m_mapContainer->setFixedTouchPanEnabled(false);
-    m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
+    m_mapContainer->setUserInteractionEnabled(false);
+    m_locationIndicatorManager = new LocationIndicatorManager(m_mapContainer);
+    connect(m_mapContainer, &MapContainer::userPanDetected,
+            m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+    connect(m_mapContainer, &MapContainer::userZoomDetected,
+            m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+    connect(m_mapContainer, &MapContainer::mapReady, this, [this]() {
+        m_locationIndicatorManager->initMap(m_mapContainer->map());
+    });
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
 
     // 控制面板 - 固定宽度，容纳 API 演示按钮 (stretch=0)
     m_controlPanel = new ControlPanelWidget(central);
@@ -652,7 +660,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->clearAnnotations();
         m_mapContainer->clearRoutes();
         m_mapContainer->clearPolygons();
-        m_mapContainer->hideLocation();
+        m_locationIndicatorManager->hideLocation();
     });
 
     // ── 导出示例按钮 ──
@@ -801,23 +809,23 @@ MainWindow::MainWindow(QWidget *parent)
     connect(btnLocShow, &QPushButton::clicked, this, [this]() {
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
-        m_mapContainer->setLocationIcon(icon);
-        m_mapContainer->setLocation(36.75, 3.05);
-        m_mapContainer->showLocation();
+        m_locationIndicatorManager->setLocationIcon(icon);
+        m_locationIndicatorManager->setLocation({36.75, 3.05});
+        m_locationIndicatorManager->showLocation();
     });
 
     auto *btnLocHide = new QPushButton(QStringLiteral("隐藏位置"), m_controlPanel);
     btnLocHide->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnLocHide);
     connect(btnLocHide, &QPushButton::clicked, this, [this]() {
-        m_mapContainer->hideLocation();
+        m_locationIndicatorManager->hideLocation();
     });
 
     auto *btnLocFree = new QPushButton(QStringLiteral("Free模式"), m_controlPanel);
     btnLocFree->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnLocFree);
     connect(btnLocFree, &QPushButton::clicked, this, [this]() {
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+        m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
     });
 
     // ── Fixed 模式拖动控制演示 ──
@@ -825,19 +833,19 @@ MainWindow::MainWindow(QWidget *parent)
     btnFixedBlocked->setStyleSheet(QStringLiteral("QPushButton { background-color: #FF5722; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnFixedBlocked);
     connect(btnFixedBlocked, &QPushButton::clicked, this, [this]() {
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(400);
-        m_mapContainer->setFixedTouchPanEnabled(false);
+        m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_locationIndicatorManager->setCenterOffset(400);
+        m_mapContainer->setUserInteractionEnabled(false);
     });
 
     auto *btnFixedAllowed = new QPushButton(QStringLiteral("Fixed+可拖动"), m_controlPanel);
     btnFixedAllowed->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnFixedAllowed);
     connect(btnFixedAllowed, &QPushButton::clicked, this, [this]() {
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(400);
-        m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
+        m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_locationIndicatorManager->setCenterOffset(400);
+        m_mapContainer->setUserInteractionEnabled(true);
+        m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
     });
 
     auto *btnFixedHeadingUp = new QPushButton(QStringLiteral("Fixed+HeadingUp"), m_controlPanel);
@@ -846,17 +854,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(btnFixedHeadingUp, &QPushButton::clicked, this, [this]() {
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
-        m_mapContainer->setLocationIcon(icon);
-        m_mapContainer->setLocation(36.75, 3.05, 45.0, 15.0, 0.0);
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(400);
-        m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
-        m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
+        m_locationIndicatorManager->setLocationIcon(icon);
+        m_locationIndicatorManager->setLocation({36.75, 3.05, 45.0});
+        m_locationIndicatorManager->setZoom(15.0);
+        m_locationIndicatorManager->setPitch(0.0);
+        m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_locationIndicatorManager->setCenterOffset(400);
+        m_mapContainer->setUserInteractionEnabled(true);
+        m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+        m_locationIndicatorManager->setFixedHeadingMode(
             LocationIndicatorManager::FixedHeadingMode::HeadingUp);
-        m_mapContainer->showLocation();
-        m_mapContainer->locationIndicatorManager()->setZoom(15.0);
-        m_mapContainer->locationIndicatorManager()->setPitch(0.0);
+        m_locationIndicatorManager->showLocation();
     });
 
     auto *btnFixedNorthUp = new QPushButton(QStringLiteral("Fixed+NorthUp"), m_controlPanel);
@@ -865,17 +873,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(btnFixedNorthUp, &QPushButton::clicked, this, [this]() {
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
-        m_mapContainer->setLocationIcon(icon);
-        m_mapContainer->setLocation(36.75, 3.05, 45.0, 15.0, 0.0);
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(400);
-        m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
-        m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
+        m_locationIndicatorManager->setLocationIcon(icon);
+        m_locationIndicatorManager->setLocation({36.75, 3.05, 45.0});
+        m_locationIndicatorManager->setZoom(15.0);
+        m_locationIndicatorManager->setPitch(0.0);
+        m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_locationIndicatorManager->setCenterOffset(400);
+        m_mapContainer->setUserInteractionEnabled(true);
+        m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+        m_locationIndicatorManager->setFixedHeadingMode(
             LocationIndicatorManager::FixedHeadingMode::NorthUp);
-        m_mapContainer->showLocation();
-        m_mapContainer->locationIndicatorManager()->setZoom(15.0);
-        m_mapContainer->locationIndicatorManager()->setPitch(0.0);
+        m_locationIndicatorManager->showLocation();
     });
 
     auto *btnSimNav = new QPushButton(QStringLiteral("模拟导航"), m_controlPanel);
@@ -884,12 +892,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(btnSimNav, &QPushButton::clicked, this, [this]() {
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
-        m_mapContainer->setLocationIcon(icon);
-        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-        m_mapContainer->setCenterOffset(400);
-        m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
-        m_mapContainer->showLocation();
+        m_locationIndicatorManager->setLocationIcon(icon);
+        m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_locationIndicatorManager->setCenterOffset(400);
+        m_mapContainer->setUserInteractionEnabled(true);
+        m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+        m_locationIndicatorManager->showLocation();
 
         static QTimer *navTimer = nullptr;
         static double simLat = 36.75;
@@ -899,7 +907,7 @@ MainWindow::MainWindow(QWidget *parent)
             navTimer->stop();
             delete navTimer;
             navTimer = nullptr;
-            m_mapContainer->locationIndicatorManager()->setFollowSmoothFactor(LocationIndicatorManager::DEFAULT_FOLLOW_SMOOTH_FACTOR);
+            m_locationIndicatorManager->setFollowSmoothFactor(LocationIndicatorManager::DEFAULT_FOLLOW_SMOOTH_FACTOR);
             return;
         }
         simLat = 36.75;
@@ -912,10 +920,10 @@ MainWindow::MainWindow(QWidget *parent)
             simLon += 0.0005;
             simHeading += 5.0;
             if (simHeading >= 360.0) simHeading -= 360.0;
-            m_mapContainer->setLocation(simLat, simLon, simHeading, -1, -1);
+            m_locationIndicatorManager->setLocation({simLat, simLon, simHeading});
         });
         navTimer->start();
-        m_mapContainer->locationIndicatorManager()->setFollowSmoothFactor(0.05);
+        m_locationIndicatorManager->setFollowSmoothFactor(0.05);
     });
 
     // ── 综合复位按钮 ──
@@ -933,7 +941,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->clearAnnotations();
         m_mapContainer->clearRoutes();
         m_mapContainer->clearPolygons();
-        m_mapContainer->hideLocation();
+        m_locationIndicatorManager->hideLocation();
     });
 
     // ============================================================
@@ -1142,9 +1150,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_locationLayerToggle, &QCheckBox::toggled,
             this, [this](bool checked) {
         if (checked)
-            m_mapContainer->showLocation();
+            m_locationIndicatorManager->showLocation();
         else
-            m_mapContainer->hideLocation();
+            m_locationIndicatorManager->hideLocation();
     });
 
     connect(m_mapContainer, &MapContainer::mapReady, this, [this]() {

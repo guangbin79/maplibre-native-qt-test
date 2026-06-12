@@ -121,12 +121,8 @@ QMapLibre::Map *MapContainer::map() const {
 }
 
 bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
-    if (obj == m_glWidget && m_locationIndicatorManager) {
-        bool isFixedBlocked = !m_fixedTouchPanEnabled
-            && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-            && m_locationIndicatorManager->isLocationVisible();
-
-        if (isFixedBlocked) {
+    if (obj == m_glWidget) {
+        if (!m_userInteractionEnabled) {
             switch (event->type()) {
             case QEvent::MouseButtonPress:
             case QEvent::MouseMove:
@@ -141,19 +137,12 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 break;
             }
         } else {
-            bool isFixedAllowed = m_fixedTouchPanEnabled
-                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-                && m_locationIndicatorManager->isLocationVisible();
             switch (event->type()) {
             case QEvent::Wheel:
-                if (isFixedAllowed) {
-                    m_locationIndicatorManager->pauseFollowing();
-                }
+                emit userZoomDetected();
                 break;
             case QEvent::MouseButtonPress: {
-                if (isFixedAllowed) {
-                    m_locationIndicatorManager->pauseFollowing();
-                }
+                emit userPanDetected();
                 auto *mouseEvent = static_cast<QMouseEvent *>(event);
                 if (mouseEvent->button() == Qt::LeftButton) {
                     QPointF screenPos = mouseEvent->position();
@@ -162,6 +151,9 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 }
                 break;
             }
+            case QEvent::MouseMove:
+                emit userPanDetected();
+                break;
             case QEvent::MouseButtonRelease:
                 break;
             default:
@@ -186,12 +178,11 @@ bool MapContainer::event(QEvent *event) {
     // 4. accept() 事件，阻止事件继续向上层传播
     // ============================================================
     case QEvent::TouchBegin: {
-        // Fixed mode touch pan: pause following to allow free map browsing
-        if (m_fixedTouchPanEnabled
-            && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-            && m_locationIndicatorManager->isLocationVisible()) {
-            m_locationIndicatorManager->pauseFollowing();
+        if (!m_userInteractionEnabled) {
+            event->accept();
+            return true;
         }
+        emit userPanDetected();
         stopCameraAnimation();
         auto *touchEvent = static_cast<QTouchEvent *>(event);
         const auto &points = touchEvent->points();
@@ -284,10 +275,7 @@ bool MapContainer::event(QEvent *event) {
 
         // 单指拖拽: 计算位置差并平移地图
         if (m_touchPointCount == 1 && m_lastTouchPoints.count() >= 1) {
-            // Fixed 模式且未启用触摸平移时，阻止单指拖动地图
-            if (!m_fixedTouchPanEnabled
-                && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-                && m_locationIndicatorManager->isLocationVisible()) {
+            if (!m_userInteractionEnabled) {
                 // 忽略拖动，只更新触摸点记录
                 m_lastTouchPoints = points;
                 event->accept();
@@ -549,20 +537,12 @@ void MapContainer::mousePressEvent(QMouseEvent *event) {
         return;
     }
 
-    // Fixed 模式且未启用触摸平移时，阻止鼠标按下启动拖动
-    if (!m_fixedTouchPanEnabled
-        && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-        && m_locationIndicatorManager->isLocationVisible()) {
+    if (!m_userInteractionEnabled) {
         event->accept();
         return;
     }
 
-    // Fixed 模式下启用触摸平移时，鼠标按下暂停跟随并切换到地图坐标显示
-    if (m_fixedTouchPanEnabled
-        && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-        && m_locationIndicatorManager->isLocationVisible()) {
-        m_locationIndicatorManager->pauseFollowing();
-    }
+    emit userPanDetected();
 
     QWidget::mousePressEvent(event);
 }
@@ -574,13 +554,12 @@ void MapContainer::mouseMoveEvent(QMouseEvent *event) {
         return;
     }
 
-    // Fixed 模式且未启用触摸平移时，阻止鼠标拖动地图
-    if (!m_fixedTouchPanEnabled
-        && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-        && m_locationIndicatorManager->isLocationVisible()) {
+    if (!m_userInteractionEnabled) {
         event->accept();
         return;
     }
+
+    emit userPanDetected();
 
     QWidget::mouseMoveEvent(event);
 }
@@ -798,86 +777,6 @@ QVector<MapPolygon> MapContainer::polygons() const {
     return m_polygonManager ? m_polygonManager->polygons() : QVector<MapPolygon>();
 }
 
-// ===== 位置指示器委托方法 =====
-
-void MapContainer::setLocation(double lat, double lon, double bearing, double zoom, double pitch) {
-    LocationIndicatorManager::LocationData data{lat, lon};
-    if (bearing >= 0) data.heading = bearing;
-    m_locationIndicatorManager->setLocation(data);
-    if (zoom >= 0) m_locationIndicatorManager->setZoom(zoom);
-    if (pitch >= 0) m_locationIndicatorManager->setPitch(pitch);
-}
-
-void MapContainer::setLocationIcon(const QImage& icon) {
-    m_locationIndicatorManager->setLocationIcon(icon);
-}
-
-void MapContainer::setLocationRotation(double degrees) {
-    m_locationRotation = degrees;
-    if (!m_locationIndicatorManager) return;
-    // 有意用 rotation 覆写 heading：此函数语义是"UI 设定旋转角度"，
-    // 在导航场景中 heading 来自 GPS/传感器，rotation 用于测试/调试覆盖。
-    auto loc = m_locationIndicatorManager->location();
-    LocationIndicatorManager::LocationData data{loc.latitude, loc.longitude, degrees, loc.speed};
-    m_locationIndicatorManager->setLocation(data);
-}
-
-double MapContainer::locationRotation() const {
-    if (!m_locationIndicatorManager) return m_locationRotation;
-    auto loc = m_locationIndicatorManager->location();
-    return loc.heading.value_or(m_locationRotation);
-}
-
-void MapContainer::setLocationMode(LocationIndicatorManager::LocationMode mode) {
-    m_locationIndicatorManager->setMode(mode);
-}
-
-LocationIndicatorManager::LocationMode MapContainer::locationMode() const {
-    return m_locationIndicatorManager->mode();
-}
-
-void MapContainer::showLocation() {
-    m_locationIndicatorManager->showLocation();
-}
-
-void MapContainer::hideLocation() {
-    m_locationIndicatorManager->hideLocation();
-}
-
-bool MapContainer::isLocationVisible() const {
-    return m_locationIndicatorManager->isLocationVisible();
-}
-
-void MapContainer::setCenterOffset(int bottomPixels) {
-    m_locationIndicatorManager->setCenterOffset(bottomPixels);
-}
-
-void MapContainer::setFollowLerpFactor(double factor) {
-    if (m_locationIndicatorManager)
-        m_locationIndicatorManager->setFollowSmoothFactor(factor);
-}
-
-double MapContainer::followLerpFactor() const {
-    return m_locationIndicatorManager ? m_locationIndicatorManager->followSmoothFactor() : 0.15;
-}
-
-void MapContainer::setFixedTouchPanEnabled(bool enabled) {
-    m_fixedTouchPanEnabled = enabled;
-}
-
-bool MapContainer::isFixedTouchPanEnabled() const {
-    return m_fixedTouchPanEnabled;
-}
-
-void MapContainer::setFixedTouchResumeTimeout(int ms) {
-    if (m_locationIndicatorManager)
-        m_locationIndicatorManager->setFixedTouchResumeTimeout(ms);
-}
-
-int MapContainer::fixedTouchResumeTimeout() const {
-    return m_locationIndicatorManager ? m_locationIndicatorManager->fixedTouchResumeTimeout() : 3000;
-}
-
 void MapContainer::setDefaultAnimationDuration(int ms) {
     m_defaultAnimDuration = ms;
 }
@@ -1019,7 +918,6 @@ void MapContainer::connectMapSignals()
     m_annotationManager = new AnnotationManager(m, this);
     m_routeManager = new RouteManager(m, this);
     m_polygonManager = new PolygonManager(m, this);
-    m_locationIndicatorManager = new LocationIndicatorManager(m, this);
 }
 
 void MapContainer::applyLanguageLabels()

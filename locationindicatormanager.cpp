@@ -1,4 +1,5 @@
 #include "locationindicatormanager.h"
+#include "mapcontainer.h"
 
 #include <QDebug>
 #include <QMapLibre/Map>
@@ -15,10 +16,12 @@
 #include <QtMath>
 
 
-LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject* parent)
-    : QObject(parent), m_map(map)
+LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
+    : QObject(container), m_map(nullptr), m_mapContainer(container)
 {
-    m_parentWidget = qobject_cast<QWidget*>(parent);
+    if (container) {
+        m_parentWidget = container;
+    }
 
     if (m_parentWidget) {
         // Create overlay as child of MapContainer, NOT in any layout.
@@ -46,6 +49,7 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
     m_resumeTimer->setSingleShot(true);
     connect(m_resumeTimer, &QTimer::timeout, this, [this]() {
         m_followingPaused = false;
+        updateInteractionEnabled();
         if (m_targetZoom >= 0) {
             m_selfAnimating = true;
             m_map->setZoom(m_targetZoom);
@@ -58,6 +62,11 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
         setLocation(m_currentLocation);
     });
 
+}
+
+void LocationIndicatorManager::initMap(QMapLibre::Map* map)
+{
+    m_map = map;
     if (m_map) {
         connect(m_map, &QMapLibre::Map::mapChanged, this,
                 [this](QMapLibre::Map::MapChange change) {
@@ -216,6 +225,12 @@ void LocationIndicatorManager::setLocationIcon(const QImage& icon)
     m_map->addImage("location-indicator-icon", scaled);
 }
 
+void LocationIndicatorManager::updateInteractionEnabled() {
+    if (!m_mapContainer) return;
+    bool enabled = !(m_mode == LocationMode::Fixed && m_visible);
+    m_mapContainer->setUserInteractionEnabled(enabled);
+}
+
 void LocationIndicatorManager::setMode(LocationMode mode)
 {
     if (mode == m_mode)
@@ -236,6 +251,7 @@ void LocationIndicatorManager::setMode(LocationMode mode)
         }
         applyFreeMode();
     }
+    updateInteractionEnabled();
 }
 
 LocationIndicatorManager::LocationMode LocationIndicatorManager::mode() const
@@ -281,6 +297,7 @@ LocationIndicatorManager::fixedHeadingMode() const
 void LocationIndicatorManager::showLocation()
 {
     m_visible = true;
+    updateInteractionEnabled();
 
     if (m_mode == LocationMode::Free) {
         if (m_state != State::FreeVisible) {
@@ -322,6 +339,7 @@ void LocationIndicatorManager::showLocation()
 void LocationIndicatorManager::hideLocation()
 {
     m_visible = false;
+    updateInteractionEnabled();
 
     if (m_state != State::Hidden) {
         if (m_state == State::FixedBrowsing)
@@ -560,6 +578,7 @@ void LocationIndicatorManager::applyFixedMode()
         if (m_resumeTimer) {
             m_resumeTimer->stop();
         }
+        updateInteractionEnabled();
     }
 }
 

@@ -12,6 +12,7 @@
 #include "mainwindow.h"
 #include "mapcontainer.h"
 #include "testrunner.h"
+#include "locationindicatormanager.h"
 #include "hxgisserver.h"
 #include "mappolygon.h"
 #include <QJsonDocument>
@@ -52,6 +53,7 @@ private slots:
 private:
     MainWindow *m_window = nullptr;
     MapContainer *m_map = nullptr;
+    LocationIndicatorManager* m_locationIndicatorManager = nullptr;
     TestRunner *m_runner = nullptr;
     HXGISServer *g_server = nullptr;
 
@@ -80,6 +82,13 @@ void GuiTest::initTestCase()
     m_map = m_window->findChild<MapContainer*>();
     QVERIFY(m_map != nullptr);
 
+    // Create Manager for test and wire signals
+    m_locationIndicatorManager = new LocationIndicatorManager(m_map);
+    connect(m_map, &MapContainer::userPanDetected,
+            m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+    connect(m_map, &MapContainer::userZoomDetected,
+            m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+
     m_runner = m_window->findChild<TestRunner*>();
     QVERIFY(m_runner != nullptr);
 
@@ -87,6 +96,7 @@ void GuiTest::initTestCase()
         QSignalSpy readySpy(m_map, &MapContainer::mapReady);
         QVERIFY(readySpy.wait(20000));
     }
+    m_locationIndicatorManager->initMap(m_map->map());
     log("Map ready");
 
     QTest::qWait(2000);
@@ -341,28 +351,28 @@ void GuiTest::testLocationApi()
 
     QImage icon(32, 32, QImage::Format_ARGB32);
     icon.fill(Qt::blue);
-    m_map->setLocationIcon(icon);
-    m_map->setLocation(36.75, 3.05);
-    m_map->showLocation();
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
     QTest::qWait(2000);
     captureScreenshot("11_location_shown");
-    QVERIFY(m_map->isLocationVisible());
+    QVERIFY(m_locationIndicatorManager->isLocationVisible());
 
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
     QTest::qWait(1000);
     captureScreenshot("12_location_fixed");
-    QCOMPARE(m_map->locationMode(), LocationIndicatorManager::LocationMode::Fixed);
+    QCOMPARE(m_locationIndicatorManager->mode(), LocationIndicatorManager::LocationMode::Fixed);
 
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
     QTest::qWait(500);
     captureScreenshot("13_location_free");
-    QCOMPARE(m_map->locationMode(), LocationIndicatorManager::LocationMode::Free);
+    QCOMPARE(m_locationIndicatorManager->mode(), LocationIndicatorManager::LocationMode::Free);
 
-    m_map->hideLocation();
+    m_locationIndicatorManager->hideLocation();
     QTest::qWait(500);
     captureScreenshot("14_location_hidden");
-    QVERIFY(!m_map->isLocationVisible());
+    QVERIFY(!m_locationIndicatorManager->isLocationVisible());
 }
 
 void GuiTest::testLocationBearingZoomPitch()
@@ -371,11 +381,11 @@ void GuiTest::testLocationBearingZoomPitch()
 
     QImage icon(32, 32, QImage::Format_ARGB32);
     icon.fill(Qt::blue);
-    m_map->setLocationIcon(icon);
-    m_map->setLocation(36.75, 3.05);
-    m_map->showLocation();
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
     QTest::qWait(1000);
 
     double initialBearing = m_map->map()->bearing();
@@ -384,7 +394,9 @@ void GuiTest::testLocationBearingZoomPitch()
     log(QStringLiteral("Initial: bearing=%1 zoom=%2 pitch=%3")
         .arg(initialBearing).arg(initialZoom).arg(initialPitch));
 
-    m_map->setLocation(36.75, 3.05, 90.0, 15.0, 45.0);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    m_locationIndicatorManager->setZoom(15.0);
+    m_locationIndicatorManager->setPitch(45.0);
     QTest::qWait(2000);
     captureScreenshot("15_location_bearing_90_zoom_15_pitch_45");
 
@@ -401,7 +413,9 @@ void GuiTest::testLocationBearingZoomPitch()
     QVERIFY2(qAbs(pitchAfter - 45.0) < 5.0,
              QStringLiteral("Pitch should be ~45, got %1").arg(pitchAfter).toUtf8());
 
-    m_map->setLocation(36.75, 3.05, 0.0, 10.0, 0.0);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 0.0});
+    m_locationIndicatorManager->setZoom(10.0);
+    m_locationIndicatorManager->setPitch(0.0);
     QTest::qWait(2000);
     captureScreenshot("15b_location_bearing_0_zoom_10_pitch_0");
 
@@ -418,8 +432,8 @@ void GuiTest::testLocationBearingZoomPitch()
     QVERIFY2(qAbs(pitchReset) < 5.0,
              QStringLiteral("Pitch should be ~0, got %1").arg(pitchReset).toUtf8());
 
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
-    m_map->hideLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
 }
 
 void GuiTest::testPolygonApi()
@@ -548,12 +562,12 @@ void GuiTest::testFixedModePanBlocked()
     // Setup: show location in Fixed mode, disable touch pan
     QImage icon(32, 32, QImage::Format_ARGB32);
     icon.fill(Qt::blue);
-    m_map->setLocationIcon(icon);
-    m_map->setLocation(36.75, 3.05);
-    m_map->showLocation();
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(400);
-    m_map->setFixedTouchPanEnabled(false);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(400);
+    m_map->setUserInteractionEnabled(false);
     QTest::qWait(2000);
     captureScreenshot("16_fixed_pan_blocked_setup");
 
@@ -591,8 +605,8 @@ void GuiTest::testFixedModePanAllowed()
     log("testFixedModePanAllowed: testing Fixed mode with pan enabled");
 
     // Setup: show location in Fixed mode, enable touch pan
-    m_map->setFixedTouchPanEnabled(true);
-    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
     QTest::qWait(1000);
     captureScreenshot("18_fixed_pan_allowed_setup");
 
@@ -972,22 +986,24 @@ void GuiTest::testLocationHeadingUp()
 
     QImage icon(32, 32, QImage::Format_ARGB32);
     icon.fill(Qt::blue);
-    m_map->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocationIcon(icon);
 
     // Setup Fixed + HeadingUp
-    m_map->setLocation(36.75, 3.05);
-    m_map->showLocation();
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
-    m_map->setFixedTouchPanEnabled(true);
-    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
-    m_map->locationIndicatorManager()->setFixedHeadingMode(
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::HeadingUp);
     QTest::qWait(2000);
     captureScreenshot("40_heading_up_initial");
 
     // Set heading to 90 degrees - map should rotate, icon stays vertical
-    m_map->setLocation(36.75, 3.05, 90.0, 15.0, 45.0);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    m_locationIndicatorManager->setZoom(15.0);
+    m_locationIndicatorManager->setPitch(45.0);
     QTest::qWait(2000);
     captureScreenshot("41_heading_up_90deg");
 
@@ -997,7 +1013,9 @@ void GuiTest::testLocationHeadingUp()
              QStringLiteral("Bearing should be ~90 in HeadingUp, got %1").arg(bearing).toUtf8());
 
     // Set heading to 180 degrees
-    m_map->setLocation(36.75, 3.05, 180.0, 15.0, 45.0);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 180.0});
+    m_locationIndicatorManager->setZoom(15.0);
+    m_locationIndicatorManager->setPitch(45.0);
     QTest::qWait(2000);
     captureScreenshot("42_heading_up_180deg");
 
@@ -1007,8 +1025,8 @@ void GuiTest::testLocationHeadingUp()
              QStringLiteral("Bearing should be ~180 in HeadingUp, got %1").arg(bearing).toUtf8());
 
     // Cleanup
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
-    m_map->hideLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
     QTest::qWait(500);
 }
 
@@ -1018,16 +1036,16 @@ void GuiTest::testLocationNorthUp()
 
     QImage icon(32, 32, QImage::Format_ARGB32);
     icon.fill(Qt::blue);
-    m_map->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocationIcon(icon);
 
     // Setup Fixed + NorthUp
-    m_map->setLocation(36.75, 3.05);
-    m_map->showLocation();
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
-    m_map->setFixedTouchPanEnabled(true);
-    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
-    m_map->locationIndicatorManager()->setFixedHeadingMode(
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::NorthUp);
     QTest::qWait(2000);
     captureScreenshot("43_north_up_initial");
@@ -1037,8 +1055,8 @@ void GuiTest::testLocationNorthUp()
     log(QStringLiteral("Bearing before heading change: %1").arg(bearingBefore));
 
     // Set heading to 90 degrees - map should NOT rotate, icon should rotate
-    // IMPORTANT: Use m_map->setLocation() to update follow targets
-    m_map->setLocation(36.75, 3.05, 90.0, -1, -1);
+    // IMPORTANT: Use setLocation() to update follow targets
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
     QTest::qWait(2000);
     captureScreenshot("44_north_up_heading_90");
 
@@ -1049,7 +1067,7 @@ void GuiTest::testLocationNorthUp()
                  .arg(bearingBefore).arg(bearingAfter).toUtf8());
 
     // Set heading to 270 degrees
-    m_map->setLocation(36.75, 3.05, 270.0, -1, -1);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 270.0});
     QTest::qWait(2000);
     captureScreenshot("45_north_up_heading_270");
 
@@ -1060,8 +1078,8 @@ void GuiTest::testLocationNorthUp()
                  .arg(bearingBefore).arg(bearingAfter).toUtf8());
 
     // Cleanup
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
-    m_map->hideLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
     QTest::qWait(500);
 }
 
@@ -1071,16 +1089,16 @@ void GuiTest::testLocationSimulatedNavigation()
 
     QImage icon(32, 32, QImage::Format_ARGB32);
     icon.fill(Qt::blue);
-    m_map->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocationIcon(icon);
 
     // Setup Fixed + HeadingUp
-    m_map->setLocation(36.75, 3.05);
-    m_map->showLocation();
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
-    m_map->setCenterOffset(200);
-    m_map->setFixedTouchPanEnabled(true);
-    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
-    m_map->locationIndicatorManager()->setFixedHeadingMode(
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::HeadingUp);
     QTest::qWait(2000);
     captureScreenshot("46_simnav_start");
@@ -1095,8 +1113,8 @@ void GuiTest::testLocationSimulatedNavigation()
         lon += 0.0008;
         heading += 15.0;
         if (heading >= 360.0) heading -= 360.0;
-        // CRITICAL: Use m_map->setLocation() to update follow timer targets
-        m_map->setLocation(lat, lon, heading, -1, -1);
+        // CRITICAL: Use setLocation() to update follow timer targets
+        m_locationIndicatorManager->setLocation({lat, lon, heading});
         QTest::qWait(500);
     }
 
@@ -1109,7 +1127,7 @@ void GuiTest::testLocationSimulatedNavigation()
              QStringLiteral("Final lat should be near 36.76, got %1").arg(finalCoord.first).toUtf8());
 
     // Now switch to NorthUp and do more updates
-    m_map->locationIndicatorManager()->setFixedHeadingMode(
+    m_locationIndicatorManager->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::NorthUp);
     QTest::qWait(1000);
 
@@ -1118,15 +1136,15 @@ void GuiTest::testLocationSimulatedNavigation()
         lon += 0.0008;
         heading += 30.0;
         if (heading >= 360.0) heading -= 360.0;
-        m_map->setLocation(lat, lon, heading, -1, -1);
+        m_locationIndicatorManager->setLocation({lat, lon, heading});
         QTest::qWait(500);
     }
 
     captureScreenshot("48_simnav_northup_after_5");
 
     // Cleanup
-    m_map->setLocationMode(LocationIndicatorManager::LocationMode::Free);
-    m_map->hideLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
     QTest::qWait(500);
 }
 
