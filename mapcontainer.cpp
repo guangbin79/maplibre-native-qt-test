@@ -97,6 +97,15 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     connect(m_fixedResumeTimer, &QTimer::timeout, this, [this]() {
         if (!m_fixedPausedByTouch) return;
         m_fixedPausedByTouch = false;
+        // Restore zoom/pitch only if they were explicitly set (>= 0)
+        if (m_targetZoom >= 0) {
+            m_locationIndicatorManager->setSelfAnimating(true);
+            m_glWidget->map()->setZoom(m_targetZoom);
+        }
+        if (m_targetPitch >= 0) {
+            m_locationIndicatorManager->setSelfAnimating(true);
+            m_glWidget->map()->setPitch(m_targetPitch);
+        }
         m_locationIndicatorManager->showLocation();
         auto loc = m_locationIndicatorManager->location();
         m_locationIndicatorManager->setLocation(loc);
@@ -1116,9 +1125,6 @@ void MapContainer::onFollowStep() {
     map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
     m_lastLat = lat;
     m_lastLon = lon;
-    // Keep location icon pinned at map center by syncing GeoJSON to lerped position
-    m_locationIndicatorManager->updateSourceToCoordinate(lat, lon);
-
     if (m_targetBearing >= 0) {
         if (m_locationIndicatorManager->fixedHeadingMode() == LocationIndicatorManager::FixedHeadingMode::HeadingUp) {
             double currentBearing = map()->bearing();

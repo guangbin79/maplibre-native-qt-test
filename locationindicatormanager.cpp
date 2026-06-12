@@ -12,7 +12,6 @@
 #include <QMargins>
 #include <QEvent>
 #include <QPainter>
-#include <QTimer>
 
 
 LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject* parent)
@@ -429,10 +428,8 @@ void LocationIndicatorManager::applyFixedMode()
                                   m_currentLocation.longitude));
         m_map->jumpTo(options);
 
-        // Defer overlay positioning — jumpTo is async, pixelForCoordinate
-        // returns stale coords if called synchronously.
         if (m_overlay) {
-            QTimer::singleShot(0, this, [this]() { repositionOverlay(); });
+            repositionOverlay();
         }
     }
 }
@@ -463,18 +460,23 @@ bool LocationIndicatorManager::eventFilter(QObject* watched, QEvent* event)
 
 void LocationIndicatorManager::repositionOverlay()
 {
-    if (!m_overlay || !m_map)
+    if (!m_overlay || !m_parentWidget)
         return;
 
-    // Convert GPS coordinate to screen pixel — most stable positioning method
-    QPointF pixel = m_map->pixelForCoordinate(
-        QMapLibre::Coordinate(m_currentLocation.latitude,
-                              m_currentLocation.longitude));
-
+    // In Fixed mode, the GPS coordinate is always at the map center.
+    // Margins shift the map content area — the visual center of that area
+    // is where the overlay should be pinned.
+    // QMargins(0, m_centerOffset, 0, 0) means content starts at y=m_centerOffset.
+    int pw = m_parentWidget->width();
+    int ph = m_parentWidget->height();
     int ow = m_overlay->width();
     int oh = m_overlay->height();
-    m_overlay->move(static_cast<int>(pixel.x() - ow / 2),
-                     static_cast<int>(pixel.y() - oh / 2));
+
+    // Content area center
+    int centerX = pw / 2;
+    int centerY = m_centerOffset + (ph - m_centerOffset) / 2;
+
+    m_overlay->move(centerX - ow / 2, centerY - oh / 2);
     m_overlay->raise();
 }
 
