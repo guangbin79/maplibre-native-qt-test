@@ -97,9 +97,9 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     connect(m_fixedResumeTimer, &QTimer::timeout, this, [this]() {
         if (!m_fixedPausedByTouch) return;
         m_fixedPausedByTouch = false;
-        m_locationIndicatorManager->setFollowingPaused(false);
+        m_locationIndicatorManager->showLocation();
         auto loc = m_locationIndicatorManager->location();
-        animateTo(loc.first, loc.second, map()->zoom(), map()->bearing(), map()->pitch(), 500);
+        m_locationIndicatorManager->setLocation(loc);
     });
 }
 
@@ -166,7 +166,6 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 if (isFixedAllowed) {
                     m_fixedResumeTimer->stop();
                     m_fixedPausedByTouch = true;
-                    m_locationIndicatorManager->setFollowingPaused(true);
                     m_followTimer->stop();
                 }
                 auto *mouseEvent = static_cast<QMouseEvent *>(event);
@@ -211,7 +210,6 @@ bool MapContainer::event(QEvent *event) {
             && m_locationIndicatorManager->isLocationVisible()) {
             m_fixedResumeTimer->stop();
             m_fixedPausedByTouch = true;
-            m_locationIndicatorManager->setFollowingPaused(true);
             m_followTimer->stop();
         }
         stopCameraAnimation();
@@ -597,7 +595,6 @@ void MapContainer::mousePressEvent(QMouseEvent *event) {
         && m_locationIndicatorManager->isLocationVisible()) {
         m_fixedResumeTimer->stop();
         m_fixedPausedByTouch = true;
-        m_locationIndicatorManager->setFollowingPaused(true);
         m_followTimer->stop();
     }
 
@@ -650,8 +647,6 @@ void MapContainer::wheelEvent(QWheelEvent *event) {
 
 void MapContainer::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
-    if (m_locationIndicatorManager)
-        m_locationIndicatorManager->repositionOverlay();
 }
 
 // ===== 标注管理委托方法 =====
@@ -851,10 +846,17 @@ QVector<MapPolygon> MapContainer::polygons() const {
 void MapContainer::setLocation(double lat, double lon, double bearing, double zoom, double pitch) {
     m_followTargetLat = lat;
     m_followTargetLon = lon;
-    m_locationIndicatorManager->setLocation(lat, lon, bearing, zoom, pitch);
+
+    LocationIndicatorManager::LocationData data{lat, lon};
+    if (bearing >= 0) data.heading = bearing;
+    m_locationIndicatorManager->setLocation(data);
+
+    m_targetBearing = bearing;
+    m_targetZoom = zoom;
+    m_targetPitch = pitch;
 
     if (m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-        && !m_locationIndicatorManager->isFollowingPaused()) {
+        && !m_followingPaused) {
         if (!m_followTimer->isActive())
             m_followTimer->start();
     }
@@ -865,17 +867,25 @@ void MapContainer::setLocationIcon(const QImage& icon) {
 }
 
 void MapContainer::setLocationRotation(double degrees) {
-    m_locationIndicatorManager->setLocationRotation(degrees);
+    m_locationRotation = degrees;
+    if (!m_locationIndicatorManager) return;
+    // 有意用 rotation 覆写 heading：此函数语义是"UI 设定旋转角度"，
+    // 在导航场景中 heading 来自 GPS/传感器，rotation 用于测试/调试覆盖。
+    auto loc = m_locationIndicatorManager->location();
+    LocationIndicatorManager::LocationData data{loc.latitude, loc.longitude, degrees, loc.speed};
+    m_locationIndicatorManager->setLocation(data);
 }
 
 double MapContainer::locationRotation() const {
-    return m_locationIndicatorManager->locationRotation();
+    if (!m_locationIndicatorManager) return m_locationRotation;
+    auto loc = m_locationIndicatorManager->location();
+    return loc.heading.value_or(m_locationRotation);
 }
 
 void MapContainer::setLocationMode(LocationIndicatorManager::LocationMode mode) {
     m_locationIndicatorManager->setMode(mode);
     if (mode == LocationIndicatorManager::LocationMode::Fixed) {
-        if (!m_locationIndicatorManager->isFollowingPaused())
+        if (!m_followingPaused)
             m_followTimer->start();
     } else {
         m_followTimer->stop();
@@ -1007,7 +1017,6 @@ void MapContainer::connectMapSignals()
             m_annotationManager->setMapReady(true);
             m_routeManager->setMapReady(true);
             m_polygonManager->setMapReady(true);
-            m_locationIndicatorManager->setMapReady(true);
             m_mapReady = true;
             emit mapReady();
             return;
@@ -1061,12 +1070,8 @@ void MapContainer::connectMapSignals()
     m_routeManager = new RouteManager(m, this);
     m_polygonManager = new PolygonManager(m, this);
     m_locationIndicatorManager = new LocationIndicatorManager(m, this);
-
-    m_locationOverlay = new QLabel(this);
-    m_locationOverlay->setFixedSize(LOCATION_OVERLAY_SIZE, LOCATION_OVERLAY_SIZE);
-    m_locationOverlay->setStyleSheet(QStringLiteral("background: transparent;"));
-    m_locationOverlay->hide();
-    m_locationIndicatorManager->setOverlayWidget(m_locationOverlay);
+    connect(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged,
+            this, [this](bool paused) { m_followingPaused = paused; });
 }
 
 void MapContainer::applyLanguageLabels()
@@ -1092,35 +1097,55 @@ void MapContainer::onFollowStep() {
         return;
     if (m_locationIndicatorManager->mode() != LocationIndicatorManager::LocationMode::Fixed)
         return;
-    if (m_locationIndicatorManager->isFollowingPaused())
+    if (m_followingPaused)
         return;
 
     auto coord = map()->coordinate();
     double lat = CameraMath::lerp(coord.first, m_followTargetLat, FOLLOW_LERP_FACTOR);
     double lon = CameraMath::lerp(coord.second, m_followTargetLon, FOLLOW_LERP_FACTOR);
 
+    m_locationIndicatorManager->setSelfAnimating(true);
+    // Debug: log every 60th call (~1 second)
+    static int followStepCount = 0;
+    if (++followStepCount % 60 == 1) {
+        qDebug() << "[LOC_DBG] onFollowStep: targetBearing=" << m_targetBearing
+                 << "followingPaused=" << m_followingPaused
+                 << "headingMode=" << (int)m_locationIndicatorManager->fixedHeadingMode()
+                 << "bearing=" << map()->bearing();
+    }
     map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
     m_lastLat = lat;
     m_lastLon = lon;
+    // Keep location icon pinned at map center by syncing GeoJSON to lerped position
+    m_locationIndicatorManager->updateSourceToCoordinate(lat, lon);
 
-    double bearing = m_locationIndicatorManager->bearing();
-    if (bearing >= 0) {
-        double currentBearing = map()->bearing();
-        double lerpedBearing = currentBearing + CameraMath::bearingDelta(currentBearing, bearing) * FOLLOW_LERP_FACTOR;
-        map()->setBearing(lerpedBearing);
-        m_lastBearing = lerpedBearing;
+    if (m_targetBearing >= 0) {
+        if (m_locationIndicatorManager->fixedHeadingMode() == LocationIndicatorManager::FixedHeadingMode::HeadingUp) {
+            double currentBearing = map()->bearing();
+            double lerpedBearing = currentBearing + CameraMath::bearingDelta(currentBearing, m_targetBearing) * FOLLOW_LERP_FACTOR;
+            m_locationIndicatorManager->setSelfAnimating(true);
+            map()->setBearing(lerpedBearing);
+            m_lastBearing = lerpedBearing;
+        } else {
+            double currentBearing = map()->bearing();
+            if (qAbs(currentBearing) > 0.01) {
+                m_locationIndicatorManager->setSelfAnimating(true);
+                map()->setBearing(0.0);
+                m_lastBearing = 0.0;
+            }
+        }
     }
 
-    double zoom = m_locationIndicatorManager->zoom();
-    if (zoom >= 0) {
-        double lerpedZoom = CameraMath::lerp(map()->zoom(), zoom, FOLLOW_LERP_FACTOR);
+    if (m_targetZoom >= 0) {
+        double lerpedZoom = CameraMath::lerp(map()->zoom(), m_targetZoom, FOLLOW_LERP_FACTOR);
+        m_locationIndicatorManager->setSelfAnimating(true);
         map()->setZoom(CameraMath::clampedZoom(lerpedZoom));
         m_lastZoom = lerpedZoom;
     }
 
-    double pitch = m_locationIndicatorManager->pitch();
-    if (pitch >= 0) {
-        double lerpedPitch = CameraMath::lerp(map()->pitch(), pitch, FOLLOW_LERP_FACTOR);
+    if (m_targetPitch >= 0) {
+        double lerpedPitch = CameraMath::lerp(map()->pitch(), m_targetPitch, FOLLOW_LERP_FACTOR);
+        m_locationIndicatorManager->setSelfAnimating(true);
         map()->setPitch(CameraMath::clampedPitch(lerpedPitch));
         m_lastPitch = lerpedPitch;
     }

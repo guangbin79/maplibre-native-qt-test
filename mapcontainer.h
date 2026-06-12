@@ -37,7 +37,6 @@
 #include "polygonmanager.h"
 #include "locationindicatormanager.h"
 #include "cameraanimationmath.h"
-#include <QLabel>
 
 namespace QMapLibre {
 class GLWidget;
@@ -1252,12 +1251,13 @@ private:
     double m_followTargetLat = 0.0;
     double m_followTargetLon = 0.0;
     static constexpr double FOLLOW_LERP_FACTOR = 0.15;
-    static constexpr int LOCATION_OVERLAY_SIZE = 40;  ///< 位置覆盖图标尺寸（像素）
 
     bool m_fixedTouchPanEnabled = false;
     int m_fixedTouchResumeTimeout = 3000;
     QTimer* m_fixedResumeTimer = nullptr;
-    bool m_fixedPausedByTouch = false;
+    bool m_fixedPausedByTouch = false;  // 触摸暂停标记——仅用于控制 m_fixedResumeTimer 的启停。
+                                        // 与 m_followingPaused 不同：后者是 Manager 通过 followingPausedChanged 信号
+                                        // 驱动的全局跟随状态；本标记是 MapContainer 层面的 timer 守卫条件。
 
     void stopCameraAnimation();
 
@@ -1265,8 +1265,14 @@ private:
     RouteManager* m_routeManager = nullptr;
     PolygonManager* m_polygonManager = nullptr;
     LocationIndicatorManager* m_locationIndicatorManager = nullptr;
-    QLabel* m_locationOverlay = nullptr;
+    bool m_followingPaused = false;
     bool m_mapReady = false;
+
+    // Camera targets managed by MapContainer (replacing old Manager bearing/zoom/pitch getters)
+    double m_targetBearing = -1.0;
+    double m_targetZoom = -1.0;
+    double m_targetPitch = -1.0;
+    double m_locationRotation = 0.0;
 
     void connectMapSignals();
     void applyLanguageLabels();

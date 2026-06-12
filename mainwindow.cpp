@@ -840,6 +840,80 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setFixedTouchResumeTimeout(3000);
     });
 
+    auto *btnFixedHeadingUp = new QPushButton(QStringLiteral("Fixed+HeadingUp"), m_controlPanel);
+    btnFixedHeadingUp->setStyleSheet(QStringLiteral("QPushButton { background-color: #FF5722; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnFixedHeadingUp);
+    connect(btnFixedHeadingUp, &QPushButton::clicked, this, [this]() {
+        QImage icon(32, 32, QImage::Format_ARGB32);
+        icon.fill(Qt::blue);
+        m_mapContainer->setLocationIcon(icon);
+        m_mapContainer->setLocation(36.75, 3.05, 45.0, 15.0, 60.0);
+        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_mapContainer->setCenterOffset(400);
+        m_mapContainer->setFixedTouchPanEnabled(true);
+        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
+            LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+        m_mapContainer->showLocation();
+    });
+
+    auto *btnFixedNorthUp = new QPushButton(QStringLiteral("Fixed+NorthUp"), m_controlPanel);
+    btnFixedNorthUp->setStyleSheet(QStringLiteral("QPushButton { background-color: #4CAF50; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnFixedNorthUp);
+    connect(btnFixedNorthUp, &QPushButton::clicked, this, [this]() {
+        QImage icon(32, 32, QImage::Format_ARGB32);
+        icon.fill(Qt::blue);
+        m_mapContainer->setLocationIcon(icon);
+        m_mapContainer->setLocation(36.75, 3.05, 0.0, 15.0, 60.0);
+        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_mapContainer->setCenterOffset(400);
+        m_mapContainer->setFixedTouchPanEnabled(true);
+        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
+            LocationIndicatorManager::FixedHeadingMode::NorthUp);
+        m_mapContainer->showLocation();
+    });
+
+    auto *btnSimNav = new QPushButton(QStringLiteral("模拟导航"), m_controlPanel);
+    btnSimNav->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnSimNav);
+    connect(btnSimNav, &QPushButton::clicked, this, [this]() {
+        QImage icon(32, 32, QImage::Format_ARGB32);
+        icon.fill(Qt::blue);
+        m_mapContainer->setLocationIcon(icon);
+        m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
+        m_mapContainer->setCenterOffset(400);
+        m_mapContainer->setFixedTouchPanEnabled(true);
+        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
+            LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+        m_mapContainer->showLocation();
+
+        static QTimer *navTimer = nullptr;
+        static double simLat = 36.75;
+        static double simLon = 3.05;
+        static double simHeading = 0.0;
+        if (navTimer) {
+            navTimer->stop();
+            delete navTimer;
+            navTimer = nullptr;
+            return;
+        }
+        simLat = 36.75;
+        simLon = 3.05;
+        simHeading = 0.0;
+        navTimer = new QTimer(this);
+        navTimer->setInterval(500);
+        connect(navTimer, &QTimer::timeout, this, [this]() {
+            simLat += 0.001;
+            simLon += 0.0005;
+            simHeading += 5.0;
+            if (simHeading >= 360.0) simHeading -= 360.0;
+            m_mapContainer->setLocation(simLat, simLon, simHeading, -1, -1);
+        });
+        navTimer->start();
+    });
+
     // ── 综合复位按钮 ──
     // 一键恢复所有地图状态到初始值
     auto *btnResetAll = new QPushButton(QStringLiteral("全部复位"), m_controlPanel);
