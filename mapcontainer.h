@@ -940,7 +940,8 @@ public:
     /** @brief 获取当前跟随插值因子 @see setFollowLerpFactor() */
     double followLerpFactor() const;
 
-    static constexpr double DEFAULT_FOLLOW_LERP_FACTOR = 0.15;
+    static constexpr double DEFAULT_FOLLOW_LERP_FACTOR =
+        LocationIndicatorManager::DEFAULT_FOLLOW_SMOOTH_FACTOR;
 
     /**
      * @brief 设置 Fixed 模式下是否允许触屏滑动地图
@@ -1268,17 +1269,7 @@ private:
     double m_animTargetPitch = 0.0;
     int m_defaultAnimDuration = 500;
 
-    QTimer* m_followTimer = nullptr;
-    double m_followTargetLat = 0.0;
-    double m_followTargetLon = 0.0;
-    double m_followLerpFactor = DEFAULT_FOLLOW_LERP_FACTOR;
-
     bool m_fixedTouchPanEnabled = false;
-    int m_fixedTouchResumeTimeout = 3000;
-    QTimer* m_fixedResumeTimer = nullptr;
-    bool m_fixedPausedByTouch = false;  // 触摸暂停标记——仅用于控制 m_fixedResumeTimer 的启停。
-                                        // 与 m_followingPaused 不同：后者是 Manager 通过 followingPausedChanged 信号
-                                        // 驱动的全局跟随状态；本标记是 MapContainer 层面的 timer 守卫条件。
 
     void stopCameraAnimation();
 
@@ -1286,13 +1277,7 @@ private:
     RouteManager* m_routeManager = nullptr;
     PolygonManager* m_polygonManager = nullptr;
     LocationIndicatorManager* m_locationIndicatorManager = nullptr;
-    bool m_followingPaused = false;
     bool m_mapReady = false;
-
-    // Camera targets managed by MapContainer (replacing old Manager bearing/zoom/pitch getters)
-    double m_targetBearing = -1.0;
-    double m_targetZoom = -1.0;
-    double m_targetPitch = -1.0;
     double m_locationRotation = 0.0;
 
     void connectMapSignals();
@@ -1300,6 +1285,5 @@ private:
 
 private slots:
     void onCameraAnimStep();
-    void onFollowStep();
 };
 

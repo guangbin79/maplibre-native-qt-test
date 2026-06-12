@@ -84,23 +84,6 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     m_cameraAnimTimer->setInterval(16);  // ~60fps
     m_cameraAnimTimer->setSingleShot(false);
     connect(m_cameraAnimTimer, &QTimer::timeout, this, &MapContainer::onCameraAnimStep);
-
-    // GPS跟随平滑定时器
-    m_followTimer = new QTimer(this);
-    m_followTimer->setInterval(16);
-    m_followTimer->setSingleShot(false);
-    connect(m_followTimer, &QTimer::timeout, this, &MapContainer::onFollowStep);
-
-    // Fixed模式触屏恢复定时器
-    m_fixedResumeTimer = new QTimer(this);
-    m_fixedResumeTimer->setSingleShot(true);
-    connect(m_fixedResumeTimer, &QTimer::timeout, this, [this]() {
-        if (!m_fixedPausedByTouch) return;
-        m_fixedPausedByTouch = false;
-        m_locationIndicatorManager->showLocation();
-        auto loc = m_locationIndicatorManager->location();
-        m_locationIndicatorManager->setLocation(loc);
-    });
 }
 
 void MapContainer::setStyle(const QString &styleUrl) {
@@ -162,11 +145,14 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
                 && m_locationIndicatorManager->isLocationVisible();
             switch (event->type()) {
+            case QEvent::Wheel:
+                if (isFixedAllowed) {
+                    m_locationIndicatorManager->pauseFollowing();
+                }
+                break;
             case QEvent::MouseButtonPress: {
                 if (isFixedAllowed) {
-                    m_fixedResumeTimer->stop();
-                    m_fixedPausedByTouch = true;
-                    m_followTimer->stop();
+                    m_locationIndicatorManager->pauseFollowing();
                 }
                 auto *mouseEvent = static_cast<QMouseEvent *>(event);
                 if (mouseEvent->button() == Qt::LeftButton) {
@@ -177,10 +163,6 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 break;
             }
             case QEvent::MouseButtonRelease:
-                if (isFixedAllowed && m_fixedPausedByTouch) {
-                    m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
-                    m_fixedResumeTimer->start();
-                }
                 break;
             default:
                 break;
@@ -208,9 +190,7 @@ bool MapContainer::event(QEvent *event) {
         if (m_fixedTouchPanEnabled
             && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
             && m_locationIndicatorManager->isLocationVisible()) {
-            m_fixedResumeTimer->stop();
-            m_fixedPausedByTouch = true;
-            m_followTimer->stop();
+            m_locationIndicatorManager->pauseFollowing();
         }
         stopCameraAnimation();
         auto *touchEvent = static_cast<QTouchEvent *>(event);
@@ -512,18 +492,12 @@ bool MapContainer::event(QEvent *event) {
                     m_panSkipCounter = 0;
                     m_twoFingerTapStartTime = 0;
                     map()->setGestureInProgress(false);
-                    // Fixed 模式暂停后，启动恢复定时器
-                    // 超时后自动恢复 Fixed 并飞回最新 GPS 位置
-                    if (m_fixedPausedByTouch) {
-                        m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
-                        m_fixedResumeTimer->start();
-                    }
                     emit touchEnd();
                     event->accept();
                     return true;
                 }
             }
-            m_twoFingerTapStartTime = 0; // 不是双指点击，重置
+            m_twoFingerTapStartTime = 0;
         }
 
         m_touchActive = false;
@@ -534,12 +508,6 @@ bool MapContainer::event(QEvent *event) {
         m_rotationSkipCounter = 0;
         m_panSkipCounter = 0;
         map()->setGestureInProgress(false);
-        // Fixed 模式暂停后，启动恢复定时器
-        // 超时后自动恢复 Fixed 并飞回最新 GPS 位置
-        if (m_fixedPausedByTouch) {
-            m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
-            m_fixedResumeTimer->start();
-        }
         emit touchEnd();
         event->accept();
         return true;
@@ -593,9 +561,7 @@ void MapContainer::mousePressEvent(QMouseEvent *event) {
     if (m_fixedTouchPanEnabled
         && m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
         && m_locationIndicatorManager->isLocationVisible()) {
-        m_fixedResumeTimer->stop();
-        m_fixedPausedByTouch = true;
-        m_followTimer->stop();
+        m_locationIndicatorManager->pauseFollowing();
     }
 
     QWidget::mousePressEvent(event);
@@ -620,24 +586,15 @@ void MapContainer::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void MapContainer::mouseReleaseEvent(QMouseEvent *event) {
-    // 触摸手势进行中时忽略鼠标释放事件，防止冲突
     if (m_touchActive) {
         event->ignore();
         return;
-    }
-
-    // Fixed 模式暂停后，启动恢复定时器
-    if (m_fixedPausedByTouch) {
-        m_fixedResumeTimer->setInterval(m_fixedTouchResumeTimeout);
-        m_fixedResumeTimer->start();
     }
 
     QWidget::mouseReleaseEvent(event);
 }
 
 void MapContainer::wheelEvent(QWheelEvent *event) {
-    // 触摸手势进行中时忽略滚轮事件，防止冲突
-    // 注意: 触摸板双指滚动在某些平台上也会触发 wheelEvent
     if (m_touchActive) {
         event->ignore();
         return;
@@ -844,22 +801,11 @@ QVector<MapPolygon> MapContainer::polygons() const {
 // ===== 位置指示器委托方法 =====
 
 void MapContainer::setLocation(double lat, double lon, double bearing, double zoom, double pitch) {
-    m_followTargetLat = lat;
-    m_followTargetLon = lon;
-
     LocationIndicatorManager::LocationData data{lat, lon};
     if (bearing >= 0) data.heading = bearing;
     m_locationIndicatorManager->setLocation(data);
-
-    m_targetBearing = bearing;
-    m_targetZoom = zoom;
-    m_targetPitch = pitch;
-
-    if (m_locationIndicatorManager->mode() == LocationIndicatorManager::LocationMode::Fixed
-        && !m_followingPaused) {
-        if (!m_followTimer->isActive())
-            m_followTimer->start();
-    }
+    if (zoom >= 0) m_locationIndicatorManager->setZoom(zoom);
+    if (pitch >= 0) m_locationIndicatorManager->setPitch(pitch);
 }
 
 void MapContainer::setLocationIcon(const QImage& icon) {
@@ -884,12 +830,6 @@ double MapContainer::locationRotation() const {
 
 void MapContainer::setLocationMode(LocationIndicatorManager::LocationMode mode) {
     m_locationIndicatorManager->setMode(mode);
-    if (mode == LocationIndicatorManager::LocationMode::Fixed) {
-        if (!m_followingPaused)
-            m_followTimer->start();
-    } else {
-        m_followTimer->stop();
-    }
 }
 
 LocationIndicatorManager::LocationMode MapContainer::locationMode() const {
@@ -913,11 +853,12 @@ void MapContainer::setCenterOffset(int bottomPixels) {
 }
 
 void MapContainer::setFollowLerpFactor(double factor) {
-    m_followLerpFactor = factor;
+    if (m_locationIndicatorManager)
+        m_locationIndicatorManager->setFollowSmoothFactor(factor);
 }
 
 double MapContainer::followLerpFactor() const {
-    return m_followLerpFactor;
+    return m_locationIndicatorManager ? m_locationIndicatorManager->followSmoothFactor() : 0.15;
 }
 
 void MapContainer::setFixedTouchPanEnabled(bool enabled) {
@@ -929,11 +870,12 @@ bool MapContainer::isFixedTouchPanEnabled() const {
 }
 
 void MapContainer::setFixedTouchResumeTimeout(int ms) {
-    m_fixedTouchResumeTimeout = ms;
+    if (m_locationIndicatorManager)
+        m_locationIndicatorManager->setFixedTouchResumeTimeout(ms);
 }
 
 int MapContainer::fixedTouchResumeTimeout() const {
-    return m_fixedTouchResumeTimeout;
+    return m_locationIndicatorManager ? m_locationIndicatorManager->fixedTouchResumeTimeout() : 3000;
 }
 
 void MapContainer::setDefaultAnimationDuration(int ms) {
@@ -1078,8 +1020,6 @@ void MapContainer::connectMapSignals()
     m_routeManager = new RouteManager(m, this);
     m_polygonManager = new PolygonManager(m, this);
     m_locationIndicatorManager = new LocationIndicatorManager(m, this);
-    connect(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged,
-            this, [this](bool paused) { m_followingPaused = paused; });
 }
 
 void MapContainer::applyLanguageLabels()
@@ -1098,43 +1038,4 @@ void MapContainer::applyLanguageLabels()
             qDebug() << "applyLanguageLabels: skip" << id;
         }
     }
-}
-
-void MapContainer::onFollowStep() {
-    if (!m_locationIndicatorManager)
-        return;
-    if (m_locationIndicatorManager->mode() != LocationIndicatorManager::LocationMode::Fixed)
-        return;
-    if (m_followingPaused)
-        return;
-
-    auto coord = map()->coordinate();
-    double lat = CameraMath::lerp(coord.first, m_followTargetLat, m_followLerpFactor);
-    double lon = CameraMath::lerp(coord.second, m_followTargetLon, m_followLerpFactor);
-
-    m_locationIndicatorManager->setSelfAnimating(true);
-    map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
-    m_lastLat = lat;
-    m_lastLon = lon;
-    if (m_targetBearing >= 0) {
-        if (m_locationIndicatorManager->fixedHeadingMode() == LocationIndicatorManager::FixedHeadingMode::HeadingUp) {
-            double currentBearing = map()->bearing();
-            double lerpedBearing = currentBearing + CameraMath::bearingDelta(currentBearing, m_targetBearing) * m_followLerpFactor;
-            m_locationIndicatorManager->setSelfAnimating(true);
-            map()->setBearing(lerpedBearing);
-            m_lastBearing = lerpedBearing;
-        } else {
-            double currentBearing = map()->bearing();
-            if (qAbs(currentBearing) > 0.01) {
-                m_locationIndicatorManager->setSelfAnimating(true);
-                map()->setBearing(0.0);
-                m_lastBearing = 0.0;
-            }
-        }
-    }
-
-    // Zoom/pitch are managed by LocationIndicatorManager:
-    // - Set once in applyFixedMode() when entering Fixed mode
-    // - Restored once in resume timeout after user drag
-    // NOT lerped every frame to avoid interfering with setCoordinate
 }

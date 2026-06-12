@@ -76,16 +76,21 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
                     } else if (change == QMapLibre::Map::MapChangeRegionWillChange) {
                         if (m_state == State::FixedFollowing && !m_selfAnimating) {
                             m_state = State::FixedBrowsing;
-                            emit followingPausedChanged(true);
 
-                            // Switch from screen-pinned overlay to Symbol Layer at GPS coords
+                            m_followingPaused = true;
+                            if (m_followTimer)
+                                m_followTimer->stop();
+                            if (m_resumeTimer) {
+                                m_resumeTimer->setInterval(m_fixedTouchResumeTimeout);
+                                m_resumeTimer->start();
+                            }
+
                             if (m_overlay)
                                 m_overlay->hide();
 
                             if (m_layerSetup && m_map) {
                                 m_displayLat = m_currentLocation.latitude;
                                 m_displayLon = m_currentLocation.longitude;
-                                // Symbol Layer coords already up-to-date from setLocation()
                                 m_map->setLayoutProperty("location-indicator-layer",
                                                           "visibility", "visible");
                                 m_selfAnimating = true;
@@ -159,6 +164,20 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
             && m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
             updateOverlayRotation();
         }
+    }
+
+    // Store follow targets for onFollowStep
+    m_followTargetLat = data.latitude;
+    m_followTargetLon = data.longitude;
+    if (data.heading.has_value()) {
+        m_targetBearing = data.heading.value();
+    }
+
+    // Start follow timer in Fixed+FixedFollowing if not paused
+    if (m_mode == LocationMode::Fixed && m_state == State::FixedFollowing
+        && !m_followingPaused && m_followTimer) {
+        if (!m_followTimer->isActive())
+            m_followTimer->start();
     }
 }
 
@@ -281,6 +300,7 @@ void LocationIndicatorManager::showLocation()
             if (old == State::FixedBrowsing)
                 emit followingPausedChanged(false);
         }
+        m_followingPaused = false;
 
         m_iconAnimTimer->stop();
 
@@ -532,6 +552,13 @@ void LocationIndicatorManager::applyFixedMode()
 
         if (m_overlay) {
             repositionOverlay();
+        }
+
+        if (!m_followingPaused && m_followTimer && !m_followTimer->isActive()) {
+            m_followTimer->start();
+        }
+        if (m_resumeTimer) {
+            m_resumeTimer->stop();
         }
     }
 }
