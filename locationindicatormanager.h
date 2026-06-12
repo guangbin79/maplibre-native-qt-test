@@ -2,54 +2,55 @@
  * @file locationindicatormanager.h
  * @brief 位置指示器管理器
  *
- * 管理当前位置图标的渲染，支持两种互斥模式：
+ * 管理当前位置图标在地图上的渲染，支持两种互斥模式：
  *
  * - Free（自由定位）：图标渲染在地图上的实际 GPS 坐标位置，
- *   使用 Symbol Layer + GeoJSON 实现。随地图移动/缩放而变化。
+ *   使用 Symbol Layer + GeoJSON 实现。随地图平移/缩放而变化。
  *   适合普通浏览场景。
  *
- * - Fixed（固定中心）：图标固定在屏幕上（如底部 1/3 处），
- *   地图平移跟随位置。使用 Qt overlay widget + setMargins 实现。
+ * - Fixed（固定中心）：图标通过 setMargins 偏移地图可视中心，
+ *   渲染在屏幕固定位置（如底部 1/3 处），地图跟随 GPS 平移。
+ *   同样使用 Symbol Layer 实现，图标始终锚定在 GPS 坐标上，
+ *   缩放/旋转/倾斜时位置精确。
  *   适合导航场景。
  *
- * @code
- * // 1. 设置位置图标
- * mapContainer->setLocationIcon(QImage(":/icons/location.png"));
- *
- * // 2. Free 模式（默认）
- * mapContainer->setLocation(39.9042, 116.4074);
- * mapContainer->showLocation();
- *
- * // 3. 切换到导航模式（Fixed）
- * mapContainer->setCenterOffset(200);    // 中心下移 200px
- * mapContainer->setLocationMode(LocationIndicatorManager::Fixed);
- * mapContainer->setLocation(39.9050, 116.4080);  // 地图自动跟随
- *
- * // 4. 切回浏览模式
- * mapContainer->setLocationMode(LocationIndicatorManager::Free);
- *
- * // 5. 隐藏
- * mapContainer->hideLocation();
- * @endcode
+ * 状态机：Hidden → FreeVisible / FixedFollowing → FixedBrowsing（用户拖拽）
+ * 导航朝向：HeadingUp（地图旋转跟随航向）/ NorthUp（地图保持正北，图标旋转）
  */
+
 
 #ifndef LOCATIONINDICATORMANAGER_H
 #define LOCATIONINDICATORMANAGER_H
 
 #include <QObject>
 #include <QImage>
-#include <QWidget>
+#include <QLabel>
+#include <QPixmap>
+#include <optional>
 
 namespace QMapLibre { class Map; }
-class QLabel;
 
 /**
  * @brief 位置指示器管理器
  *
  * 负责管理当前位置图标在地图上的渲染方式和交互行为。
- * 通过 LocationMode 枚举切换 Free/Fixed 两种显示模式。
  *
- * @see LocationMode
+ * 架构：Free 和 Fixed 模式均使用 Symbol Layer 渲染图标。
+ * Free 模式下图标跟随 GPS 坐标在地图上移动；
+ * Fixed 模式下通过 setMargins 偏移地图中心，使 GPS 坐标的图标
+ * 显示在屏幕固定位置。
+ *
+ * 状态机（State）：
+ * - Hidden：隐藏
+ * - FreeVisible：Free 模式可见
+ * - FixedFollowing：Fixed 模式跟随 GPS
+ * - FixedBrowsing：Fixed 模式用户拖拽中（自动检测）
+ *
+ * 朝向模式（HeadingMode，仅 Fixed 模式）：
+ * - HeadingUp：地图旋转跟随航向，图标保持屏幕垂直
+ * - NorthUp：地图保持正北，图标旋转指向航向
+ *
+ * @see LocationMode, HeadingMode, State
  */
 class LocationIndicatorManager : public QObject {
     Q_OBJECT
@@ -64,29 +65,51 @@ public:
     };
 
     /**
+     * @brief 导航朝向显示策略（仅在 Fixed 模式下生效）
+     */
+    enum class FixedHeadingMode {
+        HeadingUp, ///< 车头朝上 — 地图随导航方向旋转，屏幕图标保持垂直向上
+        NorthUp    ///< 正北朝上 — 地图保持正北，屏幕图标自身旋转指向航向
+    };
+
+    /**
      * @brief 构造位置指示器管理器
      *
-     * @param map    QMapLibre::Map 实例指针，用于操作地图图层和源
+     * @param map    QMapLibre::Map 实例指针，用于:
+     *   1. 监控地图 Ready 信号
+     *   2. 操作地图图层和源
+     *   3. Fixed 的 HeadingUp 下，操作地图旋转
+     *   4. Fixed 下，驶入驶出路口，地图比例尺缩放
      * @param parent 父对象，用于 Qt 对象树内存管理
      */
     explicit LocationIndicatorManager(QMapLibre::Map* map, QObject* parent = nullptr);
 
+    struct LocationData {
+        double latitude;
+        double longitude;
+        std::optional<double> heading; // 车头绝对朝向或 GPS 航向 (0-360)
+        std::optional<double> speed;   // 速度 (m/s)，用于内部动态视口计算
+    };
+
     /**
-     * @brief 设置当前位置坐标
+     * @brief 设置当前位置数据
      *
      * 更新位置指示器的 GPS 坐标。
      * - Free 模式：图标在地图上移到新坐标
      * - Fixed 模式：地图平移使该坐标对准屏幕固定点
      *
-     * @param lat 纬度 [-90, 90]
-     * @param lon 经度 [-180, 180]
-     * @param bearing 地图方向（度），-1 表示不改变
-     * @param zoom 缩放级别，-1 表示不改变
-     * @param pitch 倾斜角度（度），-1 表示不改变
+     * @param data
      *
      * @see setMode(), showLocation()
      */
-    void setLocation(double lat, double lon, double bearing = -1.0, double zoom = -1.0, double pitch = -1.0);
+    void setLocation(const LocationData& data);
+
+    /**
+     * @brief 获取当前位置数据
+     * @return 当前位置数据
+     * @see setLocation()
+     */
+    const LocationData& location() const;
 
     /**
      * @brief 设置位置指示器图标
@@ -98,52 +121,6 @@ public:
      * @endcode
      */
     void setLocationIcon(const QImage& icon);
-
-    /**
-     * @brief 设置位置指示器旋转角度
-     *
-     * 旋转图标，用于导航场景指示行进方向。
-     * - Free 模式：通过 MapLibre icon-rotate 属性旋转
-     * - Fixed 模式：通过 QTransform 旋转 overlay 图标
-     *
-     * @param degrees 旋转角度（度），0 表示图标朝上（北），顺时针增加
-     *
-     * @code
-     * // 设置图标指向东方（90度）
-     * manager->setLocationRotation(90.0);
-     *
-     * // 根据 GPS 方向旋转
-     * manager->setLocationRotation(gpsCourse);
-     * @endcode
-     *
-     * @see setLocationIcon(), locationRotation()
-     */
-    void setLocationRotation(double degrees);
-
-    /**
-     * @brief 获取当前位置指示器旋转角度
-     * @return 当前旋转角度（度）
-     * @see setLocationRotation()
-     */
-    double locationRotation() const;
-
-    /**
-     * @brief 获取当前地图方向
-     * @return 地图方向（度），-1 表示不改变
-     */
-    double bearing() const;
-
-    /**
-     * @brief 获取当前缩放级别
-     * @return 缩放级别，-1 表示不改变
-     */
-    double zoom() const;
-
-    /**
-     * @brief 获取当前倾斜角度
-     * @return 倾斜角度（度），-1 表示不改变
-     */
-    double pitch() const;
 
     /**
      * @brief 设置位置指示器模式
@@ -163,6 +140,12 @@ public:
      * @see setMode()
      */
     LocationMode mode() const;
+
+    /**
+     * @brief 设置 Fixed 模式的导航朝向策略（车头朝上/正北朝上）
+     */
+    void setFixedHeadingMode(FixedHeadingMode mode);
+    FixedHeadingMode fixedHeadingMode() const;
 
     /**
      * @brief 显示位置指示器
@@ -206,102 +189,63 @@ public:
      */
     int centerOffset() const;
 
-    /**
-     * @brief 暂停/恢复 Fixed 模式的地图跟随
-     *
-     * 暂停后 setLocation 不会移动地图。
-     *
-     * @param paused true 表示暂停跟随，false 表示恢复跟随
-     *
-     * @see isFollowingPaused(), restoreFixedDisplay()
-     */
-    void setFollowingPaused(bool paused);
+    /** Fixed 模式下更新图标 GeoJSON 到指定坐标（lerp 后的地图中心），保持图标固定在屏幕位置 */
+    void updateSourceToCoordinate(double lat, double lon);
 
-    /**
-     * @brief 查询当前跟随是否已暂停
-     * @return true 已暂停，false 未暂停
-     * @see setFollowingPaused()
-     */
-    bool isFollowingPaused() const;
+    bool isReady() const { return m_ready; }
+    bool isLayerSetup() const { return m_layerSetup; }
 
-    /**
-     * @brief 暂停时使用 — 隐藏 Fixed overlay，显示 symbol layer 图标在地图坐标上
-     *
-     * 将位置图标从屏幕固定位置切换到地图实际坐标位置显示。
-     *
-     * @see restoreFixedDisplay(), setFollowingPaused()
-     */
-    void showLocationOnMap();
-
-    /**
-     * @brief 恢复 Fixed 显示 — 显示 overlay，隐藏 symbol layer
-     *
-     * 将位置图标从地图坐标位置切换回屏幕固定位置显示。
-     *
-     * @see showLocationOnMap(), setFollowingPaused()
-     */
-    void restoreFixedDisplay();
-
-    /**
-     * @brief 获取当前 GPS 坐标
-     * @return 经纬度坐标对，first 为纬度，second 为经度
-     * @see setLocation()
-     */
-    QPair<double, double> location() const;
-
-    /**
-     * @brief 通知地图就绪状态
-     *
-     * 地图加载完成后调用，允许管理器开始设置图层和源。
-     *
-     * @param ready true 表示地图已就绪
-     */
-    void setMapReady(bool ready);
-
-    /**
-     * @brief 设置 Fixed 模式使用的覆盖 Widget
-     *
-     * 将外部 QLabel 作为 Fixed 模式下的位置图标覆盖层。
-     * 管理器会根据 setCenterOffset() 自动调整其位置。
-     *
-     * @param overlay 覆盖 Widget 指针（通常为 QLabel）
-     */
-    void setOverlayWidget(QWidget* overlay);
-
-    /**
-     * @brief 重新定位覆盖 Widget
-     *
-     * 根据当前 centerOffset 和父窗口大小重新计算覆盖层位置。
-     * 通常在窗口 resize 事件中调用。
-     */
-    void repositionOverlay();
+    /** MapContainer 的 onFollowStep 在操作相机前调用，防止 Manager 误判为用户拖拽 */
+    void setSelfAnimating(bool v) { m_selfAnimating = v; }
 
 signals:
-    void locationChanged(double lat, double lon, double bearing, double zoom, double pitch);
+    void locationChanged(const LocationData& data);
+    void followingPausedChanged(bool paused);
+
 
 private:
+    /**
+     * @brief 位置指示器内部状态
+     */
+    enum class State {
+        Hidden,         ///< 位置指示器隐藏
+        FreeVisible,    ///< Free 模式可见（图标在地图坐标上）
+        FixedFollowing, ///< Fixed 模式 — 地图跟随 GPS
+        FixedBrowsing   ///< Fixed 模式 — 用户正在拖拽地图
+    };
+
+    /**
+     * @brief 获取当前内部状态
+     * @return 当前 State
+     */
+    State state() const;
+
     void ensureLayerSetup();
     void rebuildSource();
     QByteArray buildGeoJson() const;
     void applyFixedMode();
     void applyFreeMode();
-    void applyRotatedPixmap(QLabel *label);
+    void repositionOverlay();
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
     QMapLibre::Map* m_map;
-    QWidget* m_overlay = nullptr;
     bool m_ready = false;
     bool m_layerSetup = false;
-    double m_lat = 0.0;
-    double m_lon = 0.0;
+    LocationData m_currentLocation{0.0, 0.0};
     LocationMode m_mode = LocationMode::Free;
     bool m_visible = false;
     QImage m_icon;
     double m_rotation = 0.0;  ///< 当前旋转角度（度）
-    double m_bearing = -1.0;  ///< 地图方向（度），-1 表示不改变
-    double m_zoom = -1.0;     ///< 缩放级别，-1 表示不改变
-    double m_pitch = -1.0;    ///< 倾斜角度（度），-1 表示不改变
     int m_centerOffset = 0;
-    bool m_followingPaused = false;
+    State m_state = State::Hidden;
+    FixedHeadingMode m_fixedHeadingMode = FixedHeadingMode::HeadingUp;
+    bool m_selfAnimating = false; ///< 区分自己触发的 map 变化 vs 用户拖拽
+
+    // Overlay widget for Fixed mode (screen-pinned icon)
+    QLabel *m_overlay = nullptr;
+    QWidget *m_parentWidget = nullptr;
 };
 
 #endif
