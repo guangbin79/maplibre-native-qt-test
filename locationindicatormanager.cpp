@@ -12,6 +12,7 @@
 #include <QMargins>
 #include <QEvent>
 #include <QPainter>
+#include <QtMath>
 
 
 LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject* parent)
@@ -34,6 +35,28 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
     m_iconAnimTimer = new QTimer(this);
     m_iconAnimTimer->setInterval(33);
     connect(m_iconAnimTimer, &QTimer::timeout, this, &LocationIndicatorManager::onIconAnimStep);
+
+    // Follow timer (~60fps) for smooth map position tracking
+    m_followTimer = new QTimer(this);
+    m_followTimer->setInterval(16);
+    connect(m_followTimer, &QTimer::timeout, this, &LocationIndicatorManager::onFollowStep);
+
+    // Resume timer (single-shot) — restores Fixed mode after user stops dragging
+    m_resumeTimer = new QTimer(this);
+    m_resumeTimer->setSingleShot(true);
+    connect(m_resumeTimer, &QTimer::timeout, this, [this]() {
+        m_followingPaused = false;
+        if (m_targetZoom >= 0) {
+            m_selfAnimating = true;
+            m_map->setZoom(m_targetZoom);
+        }
+        if (m_targetPitch >= 0) {
+            m_selfAnimating = true;
+            m_map->setPitch(m_targetPitch);
+        }
+        showLocation();
+        setLocation(m_currentLocation);
+    });
 
     if (m_map) {
         connect(m_map, &QMapLibre::Map::mapChanged, this,
@@ -336,6 +359,42 @@ void LocationIndicatorManager::setPitch(double pitch)
     }
 }
 
+void LocationIndicatorManager::setFollowSmoothFactor(double factor)
+{
+    m_followSmoothFactor = factor;
+}
+
+double LocationIndicatorManager::followSmoothFactor() const
+{
+    return m_followSmoothFactor;
+}
+
+void LocationIndicatorManager::setIconSmoothFactor(double factor)
+{
+    m_iconSmoothFactor = factor;
+}
+
+double LocationIndicatorManager::iconSmoothFactor() const
+{
+    return m_iconSmoothFactor;
+}
+
+void LocationIndicatorManager::setFixedTouchResumeTimeout(int ms)
+{
+    m_fixedTouchResumeTimeout = ms;
+}
+
+int LocationIndicatorManager::fixedTouchResumeTimeout() const
+{
+    return m_fixedTouchResumeTimeout;
+}
+
+void LocationIndicatorManager::pauseFollowing()
+{
+    if (m_followTimer)
+        m_followTimer->stop();
+}
+
 LocationIndicatorManager::State LocationIndicatorManager::state() const
 {
     return m_state;
@@ -493,6 +552,56 @@ void LocationIndicatorManager::applyFreeMode()
     }
 }
 
+void LocationIndicatorManager::safeSetCoordinate(double lat, double lon)
+{
+    m_selfAnimating = true;
+    m_map->setCoordinate(QMapLibre::Coordinate(lat, lon));
+}
+
+void LocationIndicatorManager::safeSetBearing(double bearing)
+{
+    m_selfAnimating = true;
+    m_map->setBearing(bearing);
+}
+
+static double lerp(double a, double b, double t) {
+    return a + (b - a) * t;
+}
+
+static double bearingDelta(double from, double to) {
+    double delta = to - from;
+    if (delta > 180.0) delta -= 360.0;
+    if (delta < -180.0) delta += 360.0;
+    return delta;
+}
+
+void LocationIndicatorManager::onFollowStep()
+{
+    if (m_state != State::FixedFollowing || m_followingPaused)
+        return;
+    if (!m_map)
+        return;
+
+    auto coord = m_map->coordinate();
+    double lat = lerp(coord.first, m_followTargetLat, m_followSmoothFactor);
+    double lon = lerp(coord.second, m_followTargetLon, m_followSmoothFactor);
+
+    safeSetCoordinate(lat, lon);
+
+    if (m_targetBearing >= 0) {
+        if (m_fixedHeadingMode == FixedHeadingMode::HeadingUp) {
+            double currentBearing = m_map->bearing();
+            double lerpedBearing = currentBearing + bearingDelta(currentBearing, m_targetBearing) * m_followSmoothFactor;
+            safeSetBearing(lerpedBearing);
+        } else {
+            double currentBearing = m_map->bearing();
+            if (qAbs(currentBearing) > 0.01) {
+                safeSetBearing(0.0);
+            }
+        }
+    }
+}
+
 void LocationIndicatorManager::onIconAnimStep()
 {
     if (!m_layerSetup || !m_map)
@@ -506,8 +615,8 @@ void LocationIndicatorManager::onIconAnimStep()
         m_displayLon = m_currentLocation.longitude;
         m_iconAnimTimer->stop();
     } else {
-        m_displayLat += dlat * ICON_ANIM_LERP;
-        m_displayLon += dlon * ICON_ANIM_LERP;
+        m_displayLat += dlat * m_iconSmoothFactor;
+        m_displayLon += dlon * m_iconSmoothFactor;
     }
 
     updateSourceToCoordinate(m_displayLat, m_displayLon);

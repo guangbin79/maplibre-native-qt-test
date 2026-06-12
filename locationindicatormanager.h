@@ -55,6 +55,7 @@ namespace QMapLibre { class Map; }
  */
 class LocationIndicatorManager : public QObject {
     Q_OBJECT
+    friend class MapContainer;
 
 public:
     /**
@@ -212,14 +213,28 @@ public:
      */
     double pitch() const { return m_targetPitch; }
 
+    /** 地图跟随平滑度 (地图追GPS位置的lerp因子，默认0.15，导航时设0.05) */
+    void setFollowSmoothFactor(double factor);
+    double followSmoothFactor() const;
+    static constexpr double DEFAULT_FOLLOW_SMOOTH_FACTOR = 0.15;
+
+    /** 图标动画平滑度 (Free/FixedBrowsing下图标位置lerp因子，默认0.15) */
+    void setIconSmoothFactor(double factor);
+    double iconSmoothFactor() const;
+    static constexpr double DEFAULT_ICON_SMOOTH_FACTOR = 0.15;
+
+    /** 恢复超时时间 (ms)，拖动地图后自动恢复Fixed跟随的等待时间，默认3000 */
+    void setFixedTouchResumeTimeout(int ms);
+    int fixedTouchResumeTimeout() const;
+
+    /** 暂停跟随 (MapContainer手势拦截时调用，幂等) */
+    void pauseFollowing();
+
     /** Fixed 模式下更新图标 GeoJSON 到指定坐标（lerp 后的地图中心），保持图标固定在屏幕位置 */
     void updateSourceToCoordinate(double lat, double lon);
 
     bool isReady() const { return m_ready; }
     bool isLayerSetup() const { return m_layerSetup; }
-
-    /** MapContainer 的 onFollowStep 在操作相机前调用，防止 Manager 误判为用户拖拽 */
-    void setSelfAnimating(bool v) { m_selfAnimating = v; }
 
 signals:
     void locationChanged(const LocationData& data);
@@ -251,7 +266,11 @@ private:
     void updateOverlayRotation();
     void repositionOverlay();
     void onIconAnimStep();
+    void onFollowStep();
+    void safeSetCoordinate(double lat, double lon);
+    void safeSetBearing(double bearing);
     int effectiveCenterOffset() const;
+    void setSelfAnimating(bool v) { m_selfAnimating = v; }
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -271,11 +290,22 @@ protected:
     FixedHeadingMode m_fixedHeadingMode = FixedHeadingMode::HeadingUp;
     bool m_selfAnimating = false; ///< 区分自己触发的 map 变化 vs 用户拖拽
 
+    // Follow timer (16ms) for smooth map tracking
+    QTimer* m_followTimer = nullptr;
+    // Resume timer (single-shot) for restoring Fixed mode after user drag
+    QTimer* m_resumeTimer = nullptr;
+    double m_followTargetLat = 0.0;
+    double m_followTargetLon = 0.0;
+    double m_targetBearing = -1.0;   // -1 = unset
+    double m_followSmoothFactor = DEFAULT_FOLLOW_SMOOTH_FACTOR;
+    double m_iconSmoothFactor = DEFAULT_ICON_SMOOTH_FACTOR;
+    int m_fixedTouchResumeTimeout = 3000;
+    bool m_followingPaused = false;
+
     // Icon position animation (FreeVisible / FixedBrowsing)
     double m_displayLat = 0.0;
     double m_displayLon = 0.0;
     QTimer* m_iconAnimTimer = nullptr;
-    static constexpr double ICON_ANIM_LERP = 0.15;
 
     // Overlay widget for Fixed mode (screen-pinned icon)
     QLabel *m_overlay = nullptr;
