@@ -922,6 +922,27 @@ public:
     void setCenterOffset(int bottomPixels);
 
     /**
+     * @brief 设置 GPS 跟随的平滑插值因子
+     *
+     * 控制 Fixed 模式下地图跟随 GPS 位置时的平滑速度。
+     * 值越大跟随越快（0.0-1.0），默认 0.15。
+     *
+     * @param factor 插值因子 [0.0, 1.0]
+     * @code
+     * // 模拟导航场景使用较低的因子实现更平滑的跟随
+     * mapContainer->setFollowLerpFactor(0.05);
+     * // 恢复默认
+     * mapContainer->setFollowLerpFactor(0.15);
+     * @endcode
+     */
+    void setFollowLerpFactor(double factor);
+
+    /** @brief 获取当前跟随插值因子 @see setFollowLerpFactor() */
+    double followLerpFactor() const;
+
+    static constexpr double DEFAULT_FOLLOW_LERP_FACTOR = 0.15;
+
+    /**
      * @brief 设置 Fixed 模式下是否允许触屏滑动地图
      *
      * 启用后，Fixed 模式下用户可触屏平移地图，地图跟随暂停；
@@ -1250,7 +1271,7 @@ private:
     QTimer* m_followTimer = nullptr;
     double m_followTargetLat = 0.0;
     double m_followTargetLon = 0.0;
-    static constexpr double FOLLOW_LERP_FACTOR = 0.15;
+    double m_followLerpFactor = DEFAULT_FOLLOW_LERP_FACTOR;
 
     bool m_fixedTouchPanEnabled = false;
     int m_fixedTouchResumeTimeout = 3000;

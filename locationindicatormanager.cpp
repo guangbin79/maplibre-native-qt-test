@@ -30,6 +30,11 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
         m_parentWidget->installEventFilter(this);
     }
 
+    // Icon animation timer (~30fps) for smooth position interpolation
+    m_iconAnimTimer = new QTimer(this);
+    m_iconAnimTimer->setInterval(33);
+    connect(m_iconAnimTimer, &QTimer::timeout, this, &LocationIndicatorManager::onIconAnimStep);
+
     if (m_map) {
         connect(m_map, &QMapLibre::Map::mapChanged, this,
                 [this](QMapLibre::Map::MapChange change) {
@@ -46,11 +51,7 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
                             rebuildSource();
                         }
                     } else if (change == QMapLibre::Map::MapChangeRegionWillChange) {
-                        if (m_state == State::FixedFollowing) {
-                            qDebug() << "[LOC_DBG] WillChange: selfAnim=" << m_selfAnimating;
-                        }
                         if (m_state == State::FixedFollowing && !m_selfAnimating) {
-                            qDebug() << "[LOC_DBG] *** FALSE DRAG → FixedBrowsing ***";
                             m_state = State::FixedBrowsing;
                             emit followingPausedChanged(true);
 
@@ -59,6 +60,8 @@ LocationIndicatorManager::LocationIndicatorManager(QMapLibre::Map* map, QObject*
                                 m_overlay->hide();
 
                             if (m_layerSetup && m_map) {
+                                m_displayLat = m_currentLocation.latitude;
+                                m_displayLon = m_currentLocation.longitude;
                                 // Symbol Layer coords already up-to-date from setLocation()
                                 m_map->setLayoutProperty("location-indicator-layer",
                                                           "visibility", "visible");
@@ -90,18 +93,29 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
 
     m_currentLocation = data;
 
+    if (m_displayLat == 0.0 && m_displayLon == 0.0) {
+        m_displayLat = data.latitude;
+        m_displayLon = data.longitude;
+    }
+
     if (coordsChanged || headingChanged)
         emit locationChanged(m_currentLocation);
 
     if (!m_ready)
         return;
 
-    // Always update Symbol Layer coordinates in all visible states.
-    // Visibility is controlled by mode (overlay vs Symbol Layer), not by
-    // skipping data updates. This ensures instant switching when state changes.
     if (m_state != State::Hidden) {
         ensureLayerSetup();
-        rebuildSource();
+
+        if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && coordsChanged) {
+            m_iconAnimTimer->start();
+        } else if (!m_iconAnimTimer->isActive()) {
+            if (m_state == State::FreeVisible || m_state == State::FixedBrowsing) {
+                updateSourceToCoordinate(m_displayLat, m_displayLon);
+            } else {
+                rebuildSource();
+            }
+        }
     }
 
     if (data.heading.has_value()) {
@@ -118,6 +132,10 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
             }
         }
 
+        if (m_state == State::FixedFollowing && m_overlay && headingChanged
+            && m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
+            updateOverlayRotation();
+        }
     }
 }
 
@@ -203,8 +221,12 @@ void LocationIndicatorManager::setFixedHeadingMode(FixedHeadingMode mode)
             m_map->setLayoutProperty("location-indicator-layer",
                                        "icon-rotation-alignment", "viewport");
             m_map->setLayoutProperty("location-indicator-layer",
-                                       "icon-rotate", 0.0);
+                                        "icon-rotate", 0.0);
         }
+    }
+
+    if (m_overlay && m_visible && m_mode == LocationMode::Fixed && m_state == State::FixedFollowing) {
+        updateOverlayRotation();
     }
 }
 
@@ -223,7 +245,9 @@ void LocationIndicatorManager::showLocation()
             m_state = State::FreeVisible;
         }
         ensureLayerSetup();
-        rebuildSource();
+        m_displayLat = m_currentLocation.latitude;
+        m_displayLon = m_currentLocation.longitude;
+        updateSourceToCoordinate(m_displayLat, m_displayLon);
         if (m_map)
             m_map->setLayoutProperty("location-indicator-layer",
                                      "visibility", "visible");
@@ -235,18 +259,10 @@ void LocationIndicatorManager::showLocation()
                 emit followingPausedChanged(false);
         }
 
+        m_iconAnimTimer->stop();
+
         if (m_overlay) {
-            // Set overlay pixmap (DPR-scaled) — no rotation in Fixed mode
-            const double dpr = QGuiApplication::primaryScreen()
-                                   ? QGuiApplication::primaryScreen()->devicePixelRatio()
-                                   : 1.0;
-            int scaledW = static_cast<int>(m_icon.width() * dpr);
-            int scaledH = static_cast<int>(m_icon.height() * dpr);
-            if (!m_icon.isNull()) {
-                QImage scaled = m_icon.scaled(scaledW, scaledH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-                m_overlay->setPixmap(QPixmap::fromImage(scaled));
-                m_overlay->setFixedSize(scaledW, scaledH);
-            }
+            updateOverlayRotation();
             m_overlay->show();
             m_overlay->raise();
         }
@@ -295,6 +311,29 @@ void LocationIndicatorManager::setCenterOffset(int bottomPixels)
 int LocationIndicatorManager::centerOffset() const
 {
     return m_centerOffset;
+}
+
+int LocationIndicatorManager::effectiveCenterOffset() const
+{
+    if (m_mode == LocationMode::Fixed && m_fixedHeadingMode == FixedHeadingMode::NorthUp)
+        return 0;
+    return m_centerOffset;
+}
+
+void LocationIndicatorManager::setZoom(double zoom)
+{
+    m_targetZoom = zoom;
+    if (m_state == State::FixedFollowing && m_map) {
+        m_map->setZoom(zoom);
+    }
+}
+
+void LocationIndicatorManager::setPitch(double pitch)
+{
+    m_targetPitch = pitch;
+    if (m_state == State::FixedFollowing && m_map) {
+        m_map->setPitch(pitch);
+    }
 }
 
 LocationIndicatorManager::State LocationIndicatorManager::state() const
@@ -406,12 +445,8 @@ void LocationIndicatorManager::applyFixedMode()
     if (!m_map)
         return;
 
-    qDebug() << "[LOC_DBG] applyFixedMode: state=" << (int)m_state
-             << "selfAnim=" << m_selfAnimating
-             << "visible=" << m_visible;
-
     m_selfAnimating = true;
-    m_map->setMargins(QMargins(0, m_centerOffset, 0, 0));
+    m_map->setMargins(QMargins(0, effectiveCenterOffset(), 0, 0));
 
     if (m_state == State::FixedFollowing) {
         ensureLayerSetup();
@@ -427,6 +462,14 @@ void LocationIndicatorManager::applyFixedMode()
             QMapLibre::Coordinate(m_currentLocation.latitude,
                                   m_currentLocation.longitude));
         m_map->jumpTo(options);
+
+        // Record current map zoom/pitch if not explicitly set by caller
+        if (m_targetZoom < 0 && m_map) {
+            m_targetZoom = m_map->zoom();
+        }
+        if (m_targetPitch < 0 && m_map) {
+            m_targetPitch = m_map->pitch();
+        }
 
         if (m_overlay) {
             repositionOverlay();
@@ -450,12 +493,76 @@ void LocationIndicatorManager::applyFreeMode()
     }
 }
 
+void LocationIndicatorManager::onIconAnimStep()
+{
+    if (!m_layerSetup || !m_map)
+        return;
+
+    double dlat = m_currentLocation.latitude - m_displayLat;
+    double dlon = m_currentLocation.longitude - m_displayLon;
+
+    if (qAbs(dlat) < 0.0000001 && qAbs(dlon) < 0.0000001) {
+        m_displayLat = m_currentLocation.latitude;
+        m_displayLon = m_currentLocation.longitude;
+        m_iconAnimTimer->stop();
+    } else {
+        m_displayLat += dlat * ICON_ANIM_LERP;
+        m_displayLon += dlon * ICON_ANIM_LERP;
+    }
+
+    updateSourceToCoordinate(m_displayLat, m_displayLon);
+}
+
 bool LocationIndicatorManager::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_parentWidget && event->type() == QEvent::Resize) {
         repositionOverlay();
     }
     return QObject::eventFilter(watched, event);
+}
+
+void LocationIndicatorManager::updateOverlayRotation()
+{
+    if (!m_overlay || m_icon.isNull())
+        return;
+
+    const double dpr = QGuiApplication::primaryScreen()
+                           ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                           : 1.0;
+    int scaledW = static_cast<int>(m_icon.width() * dpr);
+    int scaledH = static_cast<int>(m_icon.height() * dpr);
+
+    if (m_fixedHeadingMode == FixedHeadingMode::NorthUp && m_currentLocation.heading.has_value()) {
+        // Rotate icon to point in heading direction — rotate around center
+        QImage scaled = m_icon.scaled(scaledW, scaledH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+        // Create a square canvas that fits the rotated image (diagonal)
+        int side = qMax(scaledW, scaledH);
+        int diag = static_cast<int>(side * 1.5);  // enough for any rotation
+
+        // Paint original image centered on larger canvas
+        QImage canvas(diag, diag, QImage::Format_ARGB32);
+        canvas.fill(Qt::transparent);
+        QPainter p(&canvas);
+        p.drawImage((diag - scaledW) / 2, (diag - scaledH) / 2, scaled);
+        p.end();
+
+        // Rotate around center of canvas
+        QTransform transform;
+        transform.translate(diag / 2.0, diag / 2.0);
+        transform.rotate(m_currentLocation.heading.value());
+        transform.translate(-diag / 2.0, -diag / 2.0);
+
+        QPixmap rotated = QPixmap::fromImage(canvas).transformed(transform, Qt::SmoothTransformation);
+        m_overlay->setPixmap(rotated);
+        m_overlay->setFixedSize(rotated.size());
+    } else {
+        // HeadingUp: no rotation
+        QImage scaled = m_icon.scaled(scaledW, scaledH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        m_overlay->setPixmap(QPixmap::fromImage(scaled));
+        m_overlay->setFixedSize(scaledW, scaledH);
+    }
+    repositionOverlay();
 }
 
 void LocationIndicatorManager::repositionOverlay()
@@ -474,7 +581,8 @@ void LocationIndicatorManager::repositionOverlay()
 
     // Content area center
     int centerX = pw / 2;
-    int centerY = m_centerOffset + (ph - m_centerOffset) / 2;
+    int eff = effectiveCenterOffset();
+    int centerY = eff + (ph - eff) / 2;
 
     m_overlay->move(centerX - ow / 2, centerY - oh / 2);
     m_overlay->raise();

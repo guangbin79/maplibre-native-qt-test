@@ -97,15 +97,6 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     connect(m_fixedResumeTimer, &QTimer::timeout, this, [this]() {
         if (!m_fixedPausedByTouch) return;
         m_fixedPausedByTouch = false;
-        // Restore zoom/pitch only if they were explicitly set (>= 0)
-        if (m_targetZoom >= 0) {
-            m_locationIndicatorManager->setSelfAnimating(true);
-            m_glWidget->map()->setZoom(m_targetZoom);
-        }
-        if (m_targetPitch >= 0) {
-            m_locationIndicatorManager->setSelfAnimating(true);
-            m_glWidget->map()->setPitch(m_targetPitch);
-        }
         m_locationIndicatorManager->showLocation();
         auto loc = m_locationIndicatorManager->location();
         m_locationIndicatorManager->setLocation(loc);
@@ -921,6 +912,14 @@ void MapContainer::setCenterOffset(int bottomPixels) {
     m_locationIndicatorManager->setCenterOffset(bottomPixels);
 }
 
+void MapContainer::setFollowLerpFactor(double factor) {
+    m_followLerpFactor = factor;
+}
+
+double MapContainer::followLerpFactor() const {
+    return m_followLerpFactor;
+}
+
 void MapContainer::setFixedTouchPanEnabled(bool enabled) {
     m_fixedTouchPanEnabled = enabled;
 }
@@ -1110,25 +1109,17 @@ void MapContainer::onFollowStep() {
         return;
 
     auto coord = map()->coordinate();
-    double lat = CameraMath::lerp(coord.first, m_followTargetLat, FOLLOW_LERP_FACTOR);
-    double lon = CameraMath::lerp(coord.second, m_followTargetLon, FOLLOW_LERP_FACTOR);
+    double lat = CameraMath::lerp(coord.first, m_followTargetLat, m_followLerpFactor);
+    double lon = CameraMath::lerp(coord.second, m_followTargetLon, m_followLerpFactor);
 
     m_locationIndicatorManager->setSelfAnimating(true);
-    // Debug: log every 60th call (~1 second)
-    static int followStepCount = 0;
-    if (++followStepCount % 60 == 1) {
-        qDebug() << "[LOC_DBG] onFollowStep: targetBearing=" << m_targetBearing
-                 << "followingPaused=" << m_followingPaused
-                 << "headingMode=" << (int)m_locationIndicatorManager->fixedHeadingMode()
-                 << "bearing=" << map()->bearing();
-    }
     map()->setCoordinate(QMapLibre::Coordinate(lat, lon));
     m_lastLat = lat;
     m_lastLon = lon;
     if (m_targetBearing >= 0) {
         if (m_locationIndicatorManager->fixedHeadingMode() == LocationIndicatorManager::FixedHeadingMode::HeadingUp) {
             double currentBearing = map()->bearing();
-            double lerpedBearing = currentBearing + CameraMath::bearingDelta(currentBearing, m_targetBearing) * FOLLOW_LERP_FACTOR;
+            double lerpedBearing = currentBearing + CameraMath::bearingDelta(currentBearing, m_targetBearing) * m_followLerpFactor;
             m_locationIndicatorManager->setSelfAnimating(true);
             map()->setBearing(lerpedBearing);
             m_lastBearing = lerpedBearing;
@@ -1142,17 +1133,8 @@ void MapContainer::onFollowStep() {
         }
     }
 
-    if (m_targetZoom >= 0) {
-        double lerpedZoom = CameraMath::lerp(map()->zoom(), m_targetZoom, FOLLOW_LERP_FACTOR);
-        m_locationIndicatorManager->setSelfAnimating(true);
-        map()->setZoom(CameraMath::clampedZoom(lerpedZoom));
-        m_lastZoom = lerpedZoom;
-    }
-
-    if (m_targetPitch >= 0) {
-        double lerpedPitch = CameraMath::lerp(map()->pitch(), m_targetPitch, FOLLOW_LERP_FACTOR);
-        m_locationIndicatorManager->setSelfAnimating(true);
-        map()->setPitch(CameraMath::clampedPitch(lerpedPitch));
-        m_lastPitch = lerpedPitch;
-    }
+    // Zoom/pitch are managed by LocationIndicatorManager:
+    // - Set once in applyFixedMode() when entering Fixed mode
+    // - Restored once in resume timeout after user drag
+    // NOT lerped every frame to avoid interfering with setCoordinate
 }

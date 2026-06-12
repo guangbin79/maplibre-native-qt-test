@@ -26,6 +26,7 @@
 #include <QImage>
 #include <QLabel>
 #include <QPixmap>
+#include <QTimer>
 #include <optional>
 
 namespace QMapLibre { class Map; }
@@ -189,6 +190,28 @@ public:
      */
     int centerOffset() const;
 
+    /**
+     * @brief 设置目标缩放级别（Fixed 模式下生效）
+     */
+    void setZoom(double zoom);
+
+    /**
+     * @brief 设置目标俯仰角（Fixed 模式下生效）
+     */
+    void setPitch(double pitch);
+
+    /**
+     * @brief 获取目标缩放级别
+     * @return 缩放级别，-1 表示未设置
+     */
+    double zoom() const { return m_targetZoom; }
+
+    /**
+     * @brief 获取目标俯仰角
+     * @return 俯仰角，-1 表示未设置
+     */
+    double pitch() const { return m_targetPitch; }
+
     /** Fixed 模式下更新图标 GeoJSON 到指定坐标（lerp 后的地图中心），保持图标固定在屏幕位置 */
     void updateSourceToCoordinate(double lat, double lon);
 
@@ -225,7 +248,10 @@ private:
     QByteArray buildGeoJson() const;
     void applyFixedMode();
     void applyFreeMode();
+    void updateOverlayRotation();
     void repositionOverlay();
+    void onIconAnimStep();
+    int effectiveCenterOffset() const;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -239,9 +265,17 @@ protected:
     QImage m_icon;
     double m_rotation = 0.0;  ///< 当前旋转角度（度）
     int m_centerOffset = 0;
+    double m_targetZoom = -1.0;
+    double m_targetPitch = -1.0;
     State m_state = State::Hidden;
     FixedHeadingMode m_fixedHeadingMode = FixedHeadingMode::HeadingUp;
     bool m_selfAnimating = false; ///< 区分自己触发的 map 变化 vs 用户拖拽
+
+    // Icon position animation (FreeVisible / FixedBrowsing)
+    double m_displayLat = 0.0;
+    double m_displayLon = 0.0;
+    QTimer* m_iconAnimTimer = nullptr;
+    static constexpr double ICON_ANIM_LERP = 0.15;
 
     // Overlay widget for Fixed mode (screen-pinned icon)
     QLabel *m_overlay = nullptr;

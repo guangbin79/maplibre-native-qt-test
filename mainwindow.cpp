@@ -847,7 +847,7 @@ MainWindow::MainWindow(QWidget *parent)
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
         m_mapContainer->setLocationIcon(icon);
-        m_mapContainer->setLocation(36.75, 3.05, 45.0, 15.0, 60.0);
+        m_mapContainer->setLocation(36.75, 3.05, 45.0, 15.0, 0.0);
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
@@ -855,6 +855,8 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
             LocationIndicatorManager::FixedHeadingMode::HeadingUp);
         m_mapContainer->showLocation();
+        m_mapContainer->locationIndicatorManager()->setZoom(15.0);
+        m_mapContainer->locationIndicatorManager()->setPitch(0.0);
     });
 
     auto *btnFixedNorthUp = new QPushButton(QStringLiteral("Fixed+NorthUp"), m_controlPanel);
@@ -864,7 +866,7 @@ MainWindow::MainWindow(QWidget *parent)
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
         m_mapContainer->setLocationIcon(icon);
-        m_mapContainer->setLocation(36.75, 3.05, 0.0, 15.0, 60.0);
+        m_mapContainer->setLocation(36.75, 3.05, 45.0, 15.0, 0.0);
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
@@ -872,6 +874,8 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
             LocationIndicatorManager::FixedHeadingMode::NorthUp);
         m_mapContainer->showLocation();
+        m_mapContainer->locationIndicatorManager()->setZoom(15.0);
+        m_mapContainer->locationIndicatorManager()->setPitch(0.0);
     });
 
     auto *btnSimNav = new QPushButton(QStringLiteral("模拟导航"), m_controlPanel);
@@ -885,8 +889,6 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
         m_mapContainer->setFixedTouchResumeTimeout(3000);
-        m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
-            LocationIndicatorManager::FixedHeadingMode::HeadingUp);
         m_mapContainer->showLocation();
 
         static QTimer *navTimer = nullptr;
@@ -897,6 +899,7 @@ MainWindow::MainWindow(QWidget *parent)
             navTimer->stop();
             delete navTimer;
             navTimer = nullptr;
+            m_mapContainer->setFollowLerpFactor(MapContainer::DEFAULT_FOLLOW_LERP_FACTOR);
             return;
         }
         simLat = 36.75;
@@ -912,6 +915,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_mapContainer->setLocation(simLat, simLon, simHeading, -1, -1);
         });
         navTimer->start();
+        m_mapContainer->setFollowLerpFactor(0.05);
     });
 
     // ── 综合复位按钮 ──
