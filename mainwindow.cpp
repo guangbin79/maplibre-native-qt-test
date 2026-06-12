@@ -127,7 +127,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 用户在 Fixed 模式下单指拖动地图时，自动暂停 Fixed 跟随（切换到 Free 显示），
     // 松手后经过超时时间自动恢复 Fixed 模式。
     m_mapContainer->setFixedTouchPanEnabled(false);
-    m_mapContainer->setFixedTouchResumeTimeout(3000);
+    m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
 
     // 控制面板 - 固定宽度，容纳 API 演示按钮 (stretch=0)
     m_controlPanel = new ControlPanelWidget(central);
@@ -837,7 +837,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
     });
 
     auto *btnFixedHeadingUp = new QPushButton(QStringLiteral("Fixed+HeadingUp"), m_controlPanel);
@@ -851,7 +851,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
         m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
             LocationIndicatorManager::FixedHeadingMode::HeadingUp);
         m_mapContainer->showLocation();
@@ -870,7 +870,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
         m_mapContainer->locationIndicatorManager()->setFixedHeadingMode(
             LocationIndicatorManager::FixedHeadingMode::NorthUp);
         m_mapContainer->showLocation();
@@ -888,7 +888,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
         m_mapContainer->setCenterOffset(400);
         m_mapContainer->setFixedTouchPanEnabled(true);
-        m_mapContainer->setFixedTouchResumeTimeout(3000);
+        m_mapContainer->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
         m_mapContainer->showLocation();
 
         static QTimer *navTimer = nullptr;
@@ -899,7 +899,7 @@ MainWindow::MainWindow(QWidget *parent)
             navTimer->stop();
             delete navTimer;
             navTimer = nullptr;
-            m_mapContainer->setFollowLerpFactor(MapContainer::DEFAULT_FOLLOW_LERP_FACTOR);
+            m_mapContainer->locationIndicatorManager()->setFollowSmoothFactor(LocationIndicatorManager::DEFAULT_FOLLOW_SMOOTH_FACTOR);
             return;
         }
         simLat = 36.75;
@@ -915,7 +915,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_mapContainer->setLocation(simLat, simLon, simHeading, -1, -1);
         });
         navTimer->start();
-        m_mapContainer->setFollowLerpFactor(0.05);
+        m_mapContainer->locationIndicatorManager()->setFollowSmoothFactor(0.05);
     });
 
     // ── 综合复位按钮 ──

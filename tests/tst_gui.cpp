@@ -592,7 +592,7 @@ void GuiTest::testFixedModePanAllowed()
 
     // Setup: show location in Fixed mode, enable touch pan
     m_map->setFixedTouchPanEnabled(true);
-    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
     QTest::qWait(1000);
     captureScreenshot("18_fixed_pan_allowed_setup");
 
@@ -980,7 +980,7 @@ void GuiTest::testLocationHeadingUp()
     m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
     m_map->setCenterOffset(200);
     m_map->setFixedTouchPanEnabled(true);
-    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
     m_map->locationIndicatorManager()->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::HeadingUp);
     QTest::qWait(2000);
@@ -1026,7 +1026,7 @@ void GuiTest::testLocationNorthUp()
     m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
     m_map->setCenterOffset(200);
     m_map->setFixedTouchPanEnabled(true);
-    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
     m_map->locationIndicatorManager()->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::NorthUp);
     QTest::qWait(2000);
@@ -1079,7 +1079,7 @@ void GuiTest::testLocationSimulatedNavigation()
     m_map->setLocationMode(LocationIndicatorManager::LocationMode::Fixed);
     m_map->setCenterOffset(200);
     m_map->setFixedTouchPanEnabled(true);
-    m_map->setFixedTouchResumeTimeout(3000);
+    m_map->locationIndicatorManager()->setFixedTouchResumeTimeout(3000);
     m_map->locationIndicatorManager()->setFixedHeadingMode(
         LocationIndicatorManager::FixedHeadingMode::HeadingUp);
     QTest::qWait(2000);
