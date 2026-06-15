@@ -258,7 +258,6 @@ private:
      */
     State state() const;
 
-    void updateInteractionEnabled();
     void ensureLayerSetup();
     void rebuildSource();
     QByteArray buildGeoJson() const;

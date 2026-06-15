@@ -126,7 +126,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 启用 Fixed 模式下的触摸平移暂停功能：
     // 用户在 Fixed 模式下单指拖动地图时，自动暂停 Fixed 跟随（切换到 Free 显示），
     // 松手后经过超时时间自动恢复 Fixed 模式。
-    m_mapContainer->setUserInteractionEnabled(false);
+    m_mapContainer->setUserInteractionEnabled(true);
     m_locationIndicatorManager = new LocationIndicatorManager(m_mapContainer);
     connect(m_mapContainer, &MapContainer::userPanDetected,
             m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);

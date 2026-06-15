@@ -24,16 +24,8 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
     }
 
     if (m_parentWidget) {
-        // Create overlay as child of MapContainer, NOT in any layout.
-        // Child widgets not in layout float above layout-managed widgets (GL widget).
-        m_overlay = new QLabel(m_parentWidget);
-        m_overlay->setAlignment(Qt::AlignCenter);
-        m_overlay->setAttribute(Qt::WA_TranslucentBackground);
-        m_overlay->hide();
-
         m_parentWidget->installEventFilter(this);
     }
-
     // Icon animation timer (~30fps) for smooth position interpolation
     m_iconAnimTimer = new QTimer(this);
     m_iconAnimTimer->setInterval(33);
@@ -49,7 +41,6 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
     m_resumeTimer->setSingleShot(true);
     connect(m_resumeTimer, &QTimer::timeout, this, [this]() {
         m_followingPaused = false;
-        updateInteractionEnabled();
         if (m_targetZoom >= 0) {
             m_selfAnimating = true;
             m_map->setZoom(m_targetZoom);
@@ -67,6 +58,36 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
 void LocationIndicatorManager::initMap(QMapLibre::Map* map)
 {
     m_map = map;
+
+    // If the map was already loaded before initMap() was called (mapReady signal
+    // fires AFTER DidFinishLoadingMap), set m_ready directly.
+    if (m_map && m_mapContainer && m_mapContainer->isMapReady()) {
+        m_ready = true;
+    }
+
+    // Create overlay lazily — must happen AFTER the GL widget is realized
+    // (i.e., after the MapContainer has been shown), otherwise QOpenGLWidget
+    // renders on top of the QLabel. initMap() is called from mapReady signal,
+    // which fires after the map is fully loaded and the GL widget is rendering.
+    if (m_mapContainer && !m_overlay) {
+        m_overlay = new QLabel(m_mapContainer);
+        m_overlay->setAlignment(Qt::AlignCenter);
+        m_overlay->setAttribute(Qt::WA_TranslucentBackground);
+        m_overlay->hide();
+
+        // Apply stored icon if setLocationIcon() was called before initMap()
+        if (!m_icon.isNull()) {
+            const double dpr = QGuiApplication::primaryScreen()
+                ? QGuiApplication::primaryScreen()->devicePixelRatio()
+                : 1.0;
+            int scaledW = static_cast<int>(m_icon.width() * dpr);
+            int scaledH = static_cast<int>(m_icon.height() * dpr);
+            QImage scaled = m_icon.scaled(scaledW, scaledH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            m_overlay->setPixmap(QPixmap::fromImage(scaled));
+            m_overlay->setFixedSize(scaledW, scaledH);
+        }
+    }
+
     if (m_map) {
         connect(m_map, &QMapLibre::Map::mapChanged, this,
                 [this](QMapLibre::Map::MapChange change) {
@@ -108,7 +129,14 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                         }
                     } else if (change == QMapLibre::Map::MapChangeRegionDidChange
                                || change == QMapLibre::Map::MapChangeRegionDidChangeAnimated) {
-                        m_selfAnimating = false;
+                        // Defer reset to next event loop iteration — allows multiple
+                        // consecutive self-initiated map operations (setMargins, jumpTo,
+                        // setZoom, setPitch in applyFixedMode) to all be protected.
+                        // If reset synchronously, the 2nd/3rd/4th operation would be
+                        // mistaken for a user drag, hiding the overlay.
+                        QMetaObject::invokeMethod(this, [this]() {
+                            m_selfAnimating = false;
+                        }, Qt::QueuedConnection);
                         if (m_fixedHeadingMode == FixedHeadingMode::NorthUp
                             && m_state == State::FixedBrowsing
                             && m_layerSetup && m_currentLocation.heading.has_value()) {
@@ -225,12 +253,6 @@ void LocationIndicatorManager::setLocationIcon(const QImage& icon)
     m_map->addImage("location-indicator-icon", scaled);
 }
 
-void LocationIndicatorManager::updateInteractionEnabled() {
-    if (!m_mapContainer) return;
-    bool enabled = !(m_mode == LocationMode::Fixed && m_visible);
-    m_mapContainer->setUserInteractionEnabled(enabled);
-}
-
 void LocationIndicatorManager::setMode(LocationMode mode)
 {
     if (mode == m_mode)
@@ -251,7 +273,6 @@ void LocationIndicatorManager::setMode(LocationMode mode)
         }
         applyFreeMode();
     }
-    updateInteractionEnabled();
 }
 
 LocationIndicatorManager::LocationMode LocationIndicatorManager::mode() const
@@ -297,7 +318,6 @@ LocationIndicatorManager::fixedHeadingMode() const
 void LocationIndicatorManager::showLocation()
 {
     m_visible = true;
-    updateInteractionEnabled();
 
     if (m_mode == LocationMode::Free) {
         if (m_state != State::FreeVisible) {
@@ -339,7 +359,6 @@ void LocationIndicatorManager::showLocation()
 void LocationIndicatorManager::hideLocation()
 {
     m_visible = false;
-    updateInteractionEnabled();
 
     if (m_state != State::Hidden) {
         if (m_state == State::FixedBrowsing)
@@ -560,11 +579,14 @@ void LocationIndicatorManager::applyFixedMode()
                                   m_currentLocation.longitude));
         m_map->jumpTo(options);
 
-        // Record current map zoom/pitch if not explicitly set by caller
-        if (m_targetZoom < 0 && m_map) {
+        if (m_targetZoom >= 0) {
+            m_map->setZoom(m_targetZoom);
+        } else {
             m_targetZoom = m_map->zoom();
         }
-        if (m_targetPitch < 0 && m_map) {
+        if (m_targetPitch >= 0) {
+            m_map->setPitch(m_targetPitch);
+        } else {
             m_targetPitch = m_map->pitch();
         }
 
@@ -578,7 +600,6 @@ void LocationIndicatorManager::applyFixedMode()
         if (m_resumeTimer) {
             m_resumeTimer->stop();
         }
-        updateInteractionEnabled();
     }
 }
 
