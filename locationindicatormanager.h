@@ -213,15 +213,10 @@ public:
      */
     double pitch() const { return m_targetPitch; }
 
-    /** 地图跟随平滑度 (地图追GPS位置的lerp因子，默认0.15，导航时设0.05) */
-    void setFollowSmoothFactor(double factor);
-    double followSmoothFactor() const;
-    static constexpr double DEFAULT_FOLLOW_SMOOTH_FACTOR = 0.15;
-
-    /** 图标动画平滑度 (Free/FixedBrowsing下图标位置lerp因子，默认0.15) */
-    void setIconSmoothFactor(double factor);
-    double iconSmoothFactor() const;
-    static constexpr double DEFAULT_ICON_SMOOTH_FACTOR = 0.15;
+    /** Animation duration (ms) for smooth position interpolation. Set to ~1.2x GPS interval for continuous flow. */
+    void setAnimDuration(int ms);
+    int animDuration() const;
+    static constexpr int DEFAULT_ANIM_DURATION = 1200;
 
     /** 恢复超时时间 (ms)，拖动地图后自动恢复Fixed跟随的等待时间，默认3000 */
     void setFixedTouchResumeTimeout(int ms);
@@ -265,8 +260,7 @@ private:
     void applyFreeMode();
     void updateOverlayRotation();
     void repositionOverlay();
-    void onIconAnimStep();
-    void onFollowStep();
+    void onAnimStep();
     void safeSetCoordinate(double lat, double lon);
     void safeSetBearing(double bearing);
     int effectiveCenterOffset() const;
@@ -290,22 +284,29 @@ protected:
     FixedHeadingMode m_fixedHeadingMode = FixedHeadingMode::HeadingUp;
     bool m_selfAnimating = false; ///< 区分自己触发的 map 变化 vs 用户拖拽
 
-    // Follow timer (16ms) for smooth map tracking
-    QTimer* m_followTimer = nullptr;
+    // Unified animation timer (~30fps)
+    QTimer* m_animTimer = nullptr;
     // Resume timer (single-shot) for restoring Fixed mode after user drag
     QTimer* m_resumeTimer = nullptr;
     double m_followTargetLat = 0.0;
     double m_followTargetLon = 0.0;
-    double m_targetBearing = -1.0;   // -1 = unset
-    double m_followSmoothFactor = DEFAULT_FOLLOW_SMOOTH_FACTOR;
-    double m_iconSmoothFactor = DEFAULT_ICON_SMOOTH_FACTOR;
+    double m_targetBearing = -1.0;
+    int m_animDuration = DEFAULT_ANIM_DURATION;
     int m_fixedTouchResumeTimeout = 3000;
     bool m_followingPaused = false;
 
-    // Icon position animation (FreeVisible / FixedBrowsing)
+    // Animation start state — recorded on each setLocation call
+    double m_followStartLat = 0.0;
+    double m_followStartLon = 0.0;
+    double m_followStartBearing = 0.0;
+    qint64 m_followStartTime = 0;
+    double m_iconStartLat = 0.0;
+    double m_iconStartLon = 0.0;
+    qint64 m_iconStartTime = 0;
+
+    // Icon display position (FreeVisible / FixedBrowsing)
     double m_displayLat = 0.0;
     double m_displayLon = 0.0;
-    QTimer* m_iconAnimTimer = nullptr;
 
     // Overlay widget for Fixed mode (screen-pinned icon)
     QLabel *m_overlay = nullptr;

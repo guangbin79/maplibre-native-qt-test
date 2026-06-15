@@ -14,6 +14,7 @@
 #include <QEvent>
 #include <QPainter>
 #include <QtMath>
+#include <QDateTime>
 
 
 LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
@@ -26,15 +27,10 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
     if (m_parentWidget) {
         m_parentWidget->installEventFilter(this);
     }
-    // Icon animation timer (~30fps) for smooth position interpolation
-    m_iconAnimTimer = new QTimer(this);
-    m_iconAnimTimer->setInterval(33);
-    connect(m_iconAnimTimer, &QTimer::timeout, this, &LocationIndicatorManager::onIconAnimStep);
-
-    // Follow timer (~60fps) for smooth map position tracking
-    m_followTimer = new QTimer(this);
-    m_followTimer->setInterval(16);
-    connect(m_followTimer, &QTimer::timeout, this, &LocationIndicatorManager::onFollowStep);
+    // Unified animation timer (~30fps)
+    m_animTimer = new QTimer(this);
+    m_animTimer->setInterval(33);
+    connect(m_animTimer, &QTimer::timeout, this, &LocationIndicatorManager::onAnimStep);
 
     // Resume timer (single-shot) — restores Fixed mode after user stops dragging
     m_resumeTimer = new QTimer(this);
@@ -108,8 +104,8 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                             m_state = State::FixedBrowsing;
 
                             m_followingPaused = true;
-                            if (m_followTimer)
-                                m_followTimer->stop();
+                            if (m_animTimer)
+                                m_animTimer->stop();
                             if (m_resumeTimer) {
                                 m_resumeTimer->setInterval(m_fixedTouchResumeTimeout);
                                 m_resumeTimer->start();
@@ -119,12 +115,19 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                                 m_overlay->hide();
 
                             if (m_layerSetup && m_map) {
-                                m_displayLat = m_currentLocation.latitude;
-                                m_displayLon = m_currentLocation.longitude;
+                                // Start icon at current map center (where overlay was),
+                                // then animate to GPS position — smooth transition
+                                auto coord = m_map->coordinate();
+                                m_displayLat = coord.first;
+                                m_displayLon = coord.second;
+                                m_iconStartLat = coord.first;
+                                m_iconStartLon = coord.second;
+                                m_iconStartTime = QDateTime::currentMSecsSinceEpoch();
+                                updateSourceToCoordinate(m_displayLat, m_displayLon);
                                 m_map->setLayoutProperty("location-indicator-layer",
-                                                          "visibility", "visible");
-                                m_selfAnimating = true;
-                                m_map->setMargins(QMargins(0, 0, 0, 0));
+                                                           "visibility", "visible");
+                                if (m_animTimer && !m_animTimer->isActive())
+                                    m_animTimer->start();
                             }
                         }
                     } else if (change == QMapLibre::Map::MapChangeRegionDidChange
@@ -172,14 +175,13 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
     if (m_state != State::Hidden) {
         ensureLayerSetup();
 
-        if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && coordsChanged) {
-            m_iconAnimTimer->start();
-        } else if (!m_iconAnimTimer->isActive()) {
-            if (m_state == State::FreeVisible || m_state == State::FixedBrowsing) {
+        if (m_state == State::FreeVisible || m_state == State::FixedBrowsing) {
+            if (coordsChanged && m_animTimer && !m_animTimer->isActive())
+                m_animTimer->start();
+            else if (!m_animTimer || !m_animTimer->isActive())
                 updateSourceToCoordinate(m_displayLat, m_displayLon);
-            } else {
-                rebuildSource();
-            }
+        } else {
+            rebuildSource();
         }
     }
 
@@ -203,18 +205,32 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
         }
     }
 
-    // Store follow targets for onFollowStep
+    // Store follow targets for onAnimStep
     m_followTargetLat = data.latitude;
     m_followTargetLon = data.longitude;
     if (data.heading.has_value()) {
         m_targetBearing = data.heading.value();
     }
 
+    // Record animation start positions for time-deadline interpolation
+    if (m_map && m_state == State::FixedFollowing && !m_followingPaused) {
+        auto coord = m_map->coordinate();
+        m_followStartLat = coord.first;
+        m_followStartLon = coord.second;
+        m_followStartBearing = m_map->bearing();
+        m_followStartTime = QDateTime::currentMSecsSinceEpoch();
+    }
+    if (m_state == State::FreeVisible || m_state == State::FixedBrowsing) {
+        m_iconStartLat = m_displayLat;
+        m_iconStartLon = m_displayLon;
+        m_iconStartTime = QDateTime::currentMSecsSinceEpoch();
+    }
+
     // Start follow timer in Fixed+FixedFollowing if not paused
     if (m_mode == LocationMode::Fixed && m_state == State::FixedFollowing
-        && !m_followingPaused && m_followTimer) {
-        if (!m_followTimer->isActive())
-            m_followTimer->start();
+        && !m_followingPaused && m_animTimer) {
+        if (!m_animTimer->isActive())
+            m_animTimer->start();
     }
 }
 
@@ -339,7 +355,7 @@ void LocationIndicatorManager::showLocation()
         }
         m_followingPaused = false;
 
-        m_iconAnimTimer->stop();
+        m_animTimer->stop();
 
         if (m_overlay) {
             updateOverlayRotation();
@@ -416,24 +432,14 @@ void LocationIndicatorManager::setPitch(double pitch)
     }
 }
 
-void LocationIndicatorManager::setFollowSmoothFactor(double factor)
+void LocationIndicatorManager::setAnimDuration(int ms)
 {
-    m_followSmoothFactor = factor;
+    m_animDuration = qMax(100, ms);
 }
 
-double LocationIndicatorManager::followSmoothFactor() const
+int LocationIndicatorManager::animDuration() const
 {
-    return m_followSmoothFactor;
-}
-
-void LocationIndicatorManager::setIconSmoothFactor(double factor)
-{
-    m_iconSmoothFactor = factor;
-}
-
-double LocationIndicatorManager::iconSmoothFactor() const
-{
-    return m_iconSmoothFactor;
+    return m_animDuration;
 }
 
 void LocationIndicatorManager::setFixedTouchResumeTimeout(int ms)
@@ -448,8 +454,19 @@ int LocationIndicatorManager::fixedTouchResumeTimeout() const
 
 void LocationIndicatorManager::pauseFollowing()
 {
-    if (m_followTimer)
-        m_followTimer->stop();
+    // Don't stop m_animTimer — it's needed for icon animation in FixedBrowsing state.
+    // The state machine handles everything:
+    // - FixedFollowing + m_followingPaused=true → onAnimStep skips map following
+    // - FixedBrowsing → onAnimStep runs icon animation
+    // Stopping the timer here would freeze the icon during drag, because
+    // pauseFollowing() is called on every MouseMove event.
+
+    // Restart resume timer on every user interaction (called on every MouseMove).
+    // This keeps the timeout alive as long as the user is actively dragging.
+    // The timer only fires after the user stops dragging for m_fixedTouchResumeTimeout ms.
+    if (m_resumeTimer && m_state == State::FixedBrowsing) {
+        m_resumeTimer->start();
+    }
 }
 
 LocationIndicatorManager::State LocationIndicatorManager::state() const
@@ -594,8 +611,13 @@ void LocationIndicatorManager::applyFixedMode()
             repositionOverlay();
         }
 
-        if (!m_followingPaused && m_followTimer && !m_followTimer->isActive()) {
-            m_followTimer->start();
+        m_followStartLat = m_currentLocation.latitude;
+        m_followStartLon = m_currentLocation.longitude;
+        m_followStartBearing = m_map->bearing();
+        m_followStartTime = QDateTime::currentMSecsSinceEpoch();
+
+        if (!m_followingPaused && m_animTimer && !m_animTimer->isActive()) {
+            m_animTimer->start();
         }
         if (m_resumeTimer) {
             m_resumeTimer->stop();
@@ -631,6 +653,11 @@ void LocationIndicatorManager::safeSetBearing(double bearing)
     m_map->setBearing(bearing);
 }
 
+static double smoothstep(double t) {
+    t = qBound(0.0, t, 1.0);
+    return t * t * (3 - 2 * t);
+}
+
 static double lerp(double a, double b, double t) {
     return a + (b - a) * t;
 }
@@ -642,51 +669,38 @@ static double bearingDelta(double from, double to) {
     return delta;
 }
 
-void LocationIndicatorManager::onFollowStep()
+void LocationIndicatorManager::onAnimStep()
 {
-    if (m_state != State::FixedFollowing || m_followingPaused)
-        return;
     if (!m_map)
         return;
 
-    auto coord = m_map->coordinate();
-    double lat = lerp(coord.first, m_followTargetLat, m_followSmoothFactor);
-    double lon = lerp(coord.second, m_followTargetLon, m_followSmoothFactor);
+    if (m_state == State::FixedFollowing && !m_followingPaused) {
+        qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_followStartTime;
+        double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
+        double eased = smoothstep(progress);
 
-    safeSetCoordinate(lat, lon);
+        double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
+        double lon = m_followStartLon + (m_followTargetLon - m_followStartLon) * eased;
+        safeSetCoordinate(lat, lon);
 
-    if (m_targetBearing >= 0) {
-        if (m_fixedHeadingMode == FixedHeadingMode::HeadingUp) {
-            double currentBearing = m_map->bearing();
-            double lerpedBearing = currentBearing + bearingDelta(currentBearing, m_targetBearing) * m_followSmoothFactor;
-            safeSetBearing(lerpedBearing);
-        } else {
-            double currentBearing = m_map->bearing();
-            if (qAbs(currentBearing) > 0.01) {
-                safeSetBearing(0.0);
+        if (m_targetBearing >= 0) {
+            if (m_fixedHeadingMode == FixedHeadingMode::HeadingUp) {
+                double delta = bearingDelta(m_followStartBearing, m_targetBearing);
+                safeSetBearing(m_followStartBearing + delta * eased);
+            } else {
+                if (qAbs(m_map->bearing()) > 0.01)
+                    safeSetBearing(0.0);
             }
         }
+    } else if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && m_layerSetup) {
+        qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_iconStartTime;
+        double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
+        double eased = smoothstep(progress);
+
+        m_displayLat = m_iconStartLat + (m_currentLocation.latitude - m_iconStartLat) * eased;
+        m_displayLon = m_iconStartLon + (m_currentLocation.longitude - m_iconStartLon) * eased;
+        updateSourceToCoordinate(m_displayLat, m_displayLon);
     }
-}
-
-void LocationIndicatorManager::onIconAnimStep()
-{
-    if (!m_layerSetup || !m_map)
-        return;
-
-    double dlat = m_currentLocation.latitude - m_displayLat;
-    double dlon = m_currentLocation.longitude - m_displayLon;
-
-    if (qAbs(dlat) < 0.0000001 && qAbs(dlon) < 0.0000001) {
-        m_displayLat = m_currentLocation.latitude;
-        m_displayLon = m_currentLocation.longitude;
-        m_iconAnimTimer->stop();
-    } else {
-        m_displayLat += dlat * m_iconSmoothFactor;
-        m_displayLon += dlon * m_iconSmoothFactor;
-    }
-
-    updateSourceToCoordinate(m_displayLat, m_displayLon);
 }
 
 bool LocationIndicatorManager::eventFilter(QObject* watched, QEvent* event)

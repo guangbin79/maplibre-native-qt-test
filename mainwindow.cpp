@@ -907,7 +907,7 @@ MainWindow::MainWindow(QWidget *parent)
             navTimer->stop();
             delete navTimer;
             navTimer = nullptr;
-            m_locationIndicatorManager->setFollowSmoothFactor(LocationIndicatorManager::DEFAULT_FOLLOW_SMOOTH_FACTOR);
+            m_locationIndicatorManager->setAnimDuration(LocationIndicatorManager::DEFAULT_ANIM_DURATION);
             return;
         }
         simLat = 36.75;
@@ -923,7 +923,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_locationIndicatorManager->setLocation({simLat, simLon, simHeading});
         });
         navTimer->start();
-        m_locationIndicatorManager->setFollowSmoothFactor(0.05);
+        m_locationIndicatorManager->setAnimDuration(2000);
     });
 
     // ── 综合复位按钮 ──
