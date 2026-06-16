@@ -294,6 +294,8 @@ protected:
     int m_animDuration = DEFAULT_ANIM_DURATION;
     int m_fixedTouchResumeTimeout = 3000;
     bool m_followingPaused = false;
+    bool m_resumeAnimating = false;
+    static constexpr int RESUME_ANIM_DURATION = 300;  // ms — quick snap back to GPS
 
     // Animation start state — recorded on each setLocation call
     double m_followStartLat = 0.0;

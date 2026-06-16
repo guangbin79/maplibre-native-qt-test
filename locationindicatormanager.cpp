@@ -37,6 +37,26 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
     m_resumeTimer->setSingleShot(true);
     connect(m_resumeTimer, &QTimer::timeout, this, [this]() {
         m_followingPaused = false;
+
+        if (!m_map || m_state != State::FixedBrowsing)
+            return;
+
+        // Start resume animation: map slides from drag position back to GPS.
+        // Symbol Layer stays visible during animation (icon pinned at GPS coordinate).
+        // Overlay shown only AFTER animation completes (in onAnimStep).
+        m_state = State::FixedFollowing;
+        m_resumeAnimating = true;
+
+        // Pin Symbol Layer to exact GPS position
+        m_displayLat = m_currentLocation.latitude;
+        m_displayLon = m_currentLocation.longitude;
+        updateSourceToCoordinate(m_displayLat, m_displayLon);
+
+        // Restore Fixed mode margins
+        m_selfAnimating = true;
+        m_map->setMargins(QMargins(0, effectiveCenterOffset(), 0, 0));
+
+        // Restore zoom/pitch
         if (m_targetZoom >= 0) {
             m_selfAnimating = true;
             m_map->setZoom(m_targetZoom);
@@ -45,8 +65,19 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
             m_selfAnimating = true;
             m_map->setPitch(m_targetPitch);
         }
-        showLocation();
-        setLocation(m_currentLocation);
+
+        // Record animation start = current map center (drag position)
+        auto coord = m_map->coordinate();
+        m_followStartLat = coord.first;
+        m_followStartLon = coord.second;
+        m_followStartBearing = m_map->bearing();
+        m_followStartTime = QDateTime::currentMSecsSinceEpoch();
+        m_followTargetLat = m_currentLocation.latitude;
+        m_followTargetLon = m_currentLocation.longitude;
+
+        // Start animation timer
+        if (m_animTimer && !m_animTimer->isActive())
+            m_animTimer->start();
     });
 
 }
@@ -181,7 +212,8 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
             else if (!m_animTimer || !m_animTimer->isActive())
                 updateSourceToCoordinate(m_displayLat, m_displayLon);
         } else {
-            rebuildSource();
+            if (!m_resumeAnimating)
+                rebuildSource();
         }
     }
 
@@ -213,7 +245,7 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
     }
 
     // Record animation start positions for time-deadline interpolation
-    if (m_map && m_state == State::FixedFollowing && !m_followingPaused) {
+    if (m_map && m_state == State::FixedFollowing && !m_followingPaused && !m_resumeAnimating) {
         auto coord = m_map->coordinate();
         m_followStartLat = coord.first;
         m_followStartLon = coord.second;
@@ -678,7 +710,8 @@ void LocationIndicatorManager::onAnimStep()
 
     if (m_state == State::FixedFollowing && !m_followingPaused) {
         qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_followStartTime;
-        double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
+        int duration = m_resumeAnimating ? RESUME_ANIM_DURATION : m_animDuration;
+        double progress = qMin(1.0, static_cast<double>(elapsed) / duration);
         double eased = progress;
 
         double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
@@ -693,6 +726,27 @@ void LocationIndicatorManager::onAnimStep()
             } else {
                 if (qAbs(m_map->bearing()) > 0.01)
                     safeSetBearing(0.0);
+            }
+        }
+
+        // Resume animation complete — switch from Symbol Layer to overlay
+        if (m_resumeAnimating && progress >= 1.0) {
+            // Reset animation start to current GPS position for seamless
+            // handoff to normal following (prevents progress jump from
+            // 300/300=1.0 back to 300/1200=0.25)
+            m_followStartLat = m_followTargetLat;
+            m_followStartLon = m_followTargetLon;
+            m_followStartBearing = m_map->bearing();
+            m_followStartTime = QDateTime::currentMSecsSinceEpoch();
+            m_resumeAnimating = false;
+            if (m_overlay) {
+                m_overlay->show();
+                m_overlay->raise();
+                repositionOverlay();
+            }
+            if (m_layerSetup && m_map) {
+                m_map->setLayoutProperty("location-indicator-layer",
+                                          "visibility", "none");
             }
         }
     } else if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && m_layerSetup) {
