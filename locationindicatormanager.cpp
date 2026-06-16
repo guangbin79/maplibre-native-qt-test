@@ -192,9 +192,10 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
 
     m_currentLocation = data;
 
-    if (m_displayLat == 0.0 && m_displayLon == 0.0) {
+    if (!m_displayInitialized) {
         m_displayLat = data.latitude;
         m_displayLon = data.longitude;
+        m_displayInitialized = true;
     }
 
     if (coordsChanged || headingChanged)
@@ -416,6 +417,9 @@ void LocationIndicatorManager::hideLocation()
 
     if (m_overlay)
         m_overlay->hide();
+
+    if (m_animTimer)
+        m_animTimer->stop();
 
     if (m_map)
         m_map->setLayoutProperty("location-indicator-layer",
@@ -685,15 +689,6 @@ void LocationIndicatorManager::safeSetBearing(double bearing)
 {
     m_selfAnimating = true;
     m_map->setBearing(bearing);
-}
-
-static double smoothstep(double t) {
-    t = qBound(0.0, t, 1.0);
-    return t * t * (3 - 2 * t);
-}
-
-static double lerp(double a, double b, double t) {
-    return a + (b - a) * t;
 }
 
 static double bearingDelta(double from, double to) {

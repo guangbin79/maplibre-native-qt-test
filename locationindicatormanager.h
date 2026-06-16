@@ -8,10 +8,9 @@
  *   使用 Symbol Layer + GeoJSON 实现。随地图平移/缩放而变化。
  *   适合普通浏览场景。
  *
- * - Fixed（固定中心）：图标通过 setMargins 偏移地图可视中心，
- *   渲染在屏幕固定位置（如底部 1/3 处），地图跟随 GPS 平移。
- *   同样使用 Symbol Layer 实现，图标始终锚定在 GPS 坐标上，
- *   缩放/旋转/倾斜时位置精确。
+ * - Fixed（固定中心）：通过 QLabel overlay 将图标渲染在屏幕固定位置
+ *   （如底部 1/3 处），通过 setMargins 偏移地图可视中心使 GPS 坐标
+ *   对准图标位置。地图跟随 GPS 平移。
  *   适合导航场景。
  *
  * 状态机：Hidden → FreeVisible / FixedFollowing → FixedBrowsing（用户拖拽）
@@ -76,12 +75,10 @@ public:
     /**
      * @brief 构造位置指示器管理器
      *
-     * @param map    QMapLibre::Map 实例指针，用于:
-     *   1. 监控地图 Ready 信号
-     *   2. 操作地图图层和源
-     *   3. Fixed 的 HeadingUp 下，操作地图旋转
-     *   4. Fixed 下，驶入驶出路口，地图比例尺缩放
-     * @param parent 父对象，用于 Qt 对象树内存管理
+     * @param container MapContainer 实例指针，用于:
+     *   1. 作为 Qt 父对象管理生命周期
+     *   2. 安装事件过滤器（监听 Resize 事件）
+     *   3. 后续通过 initMap() 关联 QMapLibre::Map
      */
     explicit LocationIndicatorManager(MapContainer* container);
     void initMap(QMapLibre::Map* map);
@@ -225,9 +222,6 @@ public:
     /** 暂停跟随 (MapContainer手势拦截时调用，幂等) */
     void pauseFollowing();
 
-    /** Fixed 模式下更新图标 GeoJSON 到指定坐标（lerp 后的地图中心），保持图标固定在屏幕位置 */
-    void updateSourceToCoordinate(double lat, double lon);
-
     bool isReady() const { return m_ready; }
     bool isLayerSetup() const { return m_layerSetup; }
 
@@ -261,10 +255,11 @@ private:
     void updateOverlayRotation();
     void repositionOverlay();
     void onAnimStep();
+    void updateSourceToCoordinate(double lat, double lon);
     void safeSetCoordinate(double lat, double lon);
     void safeSetBearing(double bearing);
     int effectiveCenterOffset() const;
-    void setSelfAnimating(bool v) { m_selfAnimating = v; }
+
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -309,6 +304,7 @@ protected:
     // Icon display position (FreeVisible / FixedBrowsing)
     double m_displayLat = 0.0;
     double m_displayLon = 0.0;
+    bool m_displayInitialized = false;
 
     // Overlay widget for Fixed mode (screen-pinned icon)
     QLabel *m_overlay = nullptr;
