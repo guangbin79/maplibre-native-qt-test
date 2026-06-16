@@ -596,12 +596,19 @@ void LocationIndicatorManager::applyFixedMode()
                                   m_currentLocation.longitude));
         m_map->jumpTo(options);
 
+        m_followStartLat = m_currentLocation.latitude;
+        m_followStartLon = m_currentLocation.longitude;
+        m_followStartBearing = m_map->bearing();
+        m_followStartTime = QDateTime::currentMSecsSinceEpoch();
+
         if (m_targetZoom >= 0) {
+            m_selfAnimating = true;
             m_map->setZoom(m_targetZoom);
         } else {
             m_targetZoom = m_map->zoom();
         }
         if (m_targetPitch >= 0) {
+            m_selfAnimating = true;
             m_map->setPitch(m_targetPitch);
         } else {
             m_targetPitch = m_map->pitch();
@@ -610,11 +617,6 @@ void LocationIndicatorManager::applyFixedMode()
         if (m_overlay) {
             repositionOverlay();
         }
-
-        m_followStartLat = m_currentLocation.latitude;
-        m_followStartLon = m_currentLocation.longitude;
-        m_followStartBearing = m_map->bearing();
-        m_followStartTime = QDateTime::currentMSecsSinceEpoch();
 
         if (!m_followingPaused && m_animTimer && !m_animTimer->isActive()) {
             m_animTimer->start();
@@ -677,10 +679,11 @@ void LocationIndicatorManager::onAnimStep()
     if (m_state == State::FixedFollowing && !m_followingPaused) {
         qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_followStartTime;
         double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
-        double eased = smoothstep(progress);
+        double eased = progress;
 
         double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
         double lon = m_followStartLon + (m_followTargetLon - m_followStartLon) * eased;
+        m_selfAnimating = true;
         safeSetCoordinate(lat, lon);
 
         if (m_targetBearing >= 0) {
@@ -695,7 +698,7 @@ void LocationIndicatorManager::onAnimStep()
     } else if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && m_layerSetup) {
         qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_iconStartTime;
         double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
-        double eased = smoothstep(progress);
+        double eased = progress;
 
         m_displayLat = m_iconStartLat + (m_currentLocation.latitude - m_iconStartLat) * eased;
         m_displayLon = m_iconStartLon + (m_currentLocation.longitude - m_iconStartLon) * eased;

@@ -914,7 +914,7 @@ MainWindow::MainWindow(QWidget *parent)
         simLon = 3.05;
         simHeading = 0.0;
         navTimer = new QTimer(this);
-        navTimer->setInterval(500);
+        navTimer->setInterval(1000);
         connect(navTimer, &QTimer::timeout, this, [this]() {
             simLat += 0.001;
             simLon += 0.0005;
@@ -923,7 +923,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_locationIndicatorManager->setLocation({simLat, simLon, simHeading});
         });
         navTimer->start();
-        m_locationIndicatorManager->setAnimDuration(2000);
+        m_locationIndicatorManager->setAnimDuration(LocationIndicatorManager::DEFAULT_ANIM_DURATION);
     });
 
     // ── 综合复位按钮 ──
