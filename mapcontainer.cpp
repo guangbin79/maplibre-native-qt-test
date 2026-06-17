@@ -45,7 +45,6 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // 限制 tile 缓存数据库大小
     settings.setCacheDatabaseMaximumSize(200 * 1024 * 1024);
     // 约束渲染区域:pitch 变大时远处不渲染,限制瓦片数量
-    settings.setConstrainMode(QMapLibre::Settings::ConstrainWidthAndHeight);
     if (!config.styleUrl.isEmpty()) {
         settings.setStyles(QMapLibre::Styles{
             QMapLibre::Style(config.styleUrl, QStringLiteral("HXGIS Day"))
@@ -118,6 +117,14 @@ void MapContainer::setPitch(double pitch) {
     m_glWidget->map()->setPitch(pitch);
 }
 
+void MapContainer::setMaxPitch(double maxPitch) {
+    m_maxPitch = qBound(0.0, maxPitch, 60.0);
+}
+
+double MapContainer::maxPitch() const {
+    return m_maxPitch;
+}
+
 QMapLibre::Map *MapContainer::map() const {
     return m_glWidget->map();
 }
@@ -180,7 +187,7 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
 
                     if (std::abs(dy) > 0.5) {
                         double pitchDelta = -dy * PITCH_SENSITIVITY;
-                        double newPitch = qBound(MIN_PITCH, map()->pitch() + pitchDelta, MAX_PITCH);
+                        double newPitch = qBound(MIN_PITCH, map()->pitch() + pitchDelta, m_maxPitch);
                         map()->setPitch(newPitch);
                         if (newPitch != m_lastPitch) {
                             m_lastPitch = newPitch;
@@ -400,7 +407,7 @@ bool MapContainer::event(QEvent *event) {
                 qreal dy = currCenter.y() - prevCenter.y();
                 if (std::abs(dy) > 0.5) {
                     double pitchDelta = -dy * PITCH_SENSITIVITY;
-                    double newPitch = qBound(MIN_PITCH, map()->pitch() + pitchDelta, MAX_PITCH);
+                    double newPitch = qBound(MIN_PITCH, map()->pitch() + pitchDelta, m_maxPitch);
                     map()->setPitch(newPitch);
                     if (newPitch != m_lastPitch) {
                         m_lastPitch = newPitch;
