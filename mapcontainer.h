@@ -1039,6 +1039,8 @@ private:
     int m_touchPointCount = 0;
     QList<QTouchEvent::TouchPoint> m_lastTouchPoints;
     QPointF m_lastMousePos;
+    bool m_rightDragActive = false;        ///< 右键拖拽进行中（调整俯仰角）
+    QPointF m_lastRightDragPos;            ///< 右键拖拽上一帧位置
 
     // 复合手势状态识别：锁定主导手势，避免缩放/旋转/倾斜互相干扰
     enum class GestureMode { None, Scale, Rotate, Pitch, Both };
@@ -1056,6 +1058,10 @@ private:
     static constexpr double MIN_PITCH = 0.0;   ///< 最小倾斜角度
     static constexpr double MAX_PITCH = 60.0;  ///< 最大倾斜角度
     static constexpr qreal PITCH_SENSITIVITY = 0.15; ///< 倾斜灵敏度系数
+
+    // 右键拖拽旋转参数（参考 maplibre-gl MouseRotateHandler）
+    static constexpr qreal ROTATE_DEGREES_PER_PIXEL = 0.8; ///< 水平位移每像素旋转度数
+    static constexpr int MIN_PIXEL_CENTER_THRESHOLD = 100; ///< 远离中心时切换为弧线旋转的垂直阈值
 
     // 双击检测：用于单指双击放大地图
     qint64 m_lastTouchEndTime = 0;     ///< 上次触摸结束的时间戳（毫秒）
@@ -1094,6 +1100,9 @@ private:
     bool m_userInteractionEnabled = true;
 
     void stopCameraAnimation();
+
+    // 围绕中心点的有向夹角（度），参考 maplibre-gl getAngleDelta
+    static qreal getAngleDelta(const QPointF &lastPoint, const QPointF &currentPoint, const QPointF &center);
 
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;

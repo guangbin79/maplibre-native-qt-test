@@ -120,6 +120,16 @@ QMapLibre::Map *MapContainer::map() const {
     return m_glWidget->map();
 }
 
+qreal MapContainer::getAngleDelta(const QPointF &lastPoint, const QPointF &currentPoint, const QPointF &center) {
+    qreal pvx = currentPoint.x() - center.x();
+    qreal pvy = currentPoint.y() - center.y();
+    qreal lvx = lastPoint.x() - center.x();
+    qreal lvy = lastPoint.y() - center.y();
+    qreal cross = pvx * lvy - pvy * lvx;
+    qreal dot = pvx * lvx + pvy * lvy;
+    return qRadiansToDegrees(std::atan2(cross, dot));
+}
+
 bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
     if (obj == m_glWidget) {
         if (!m_userInteractionEnabled) {
@@ -142,8 +152,16 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 emit userZoomDetected();
                 break;
             case QEvent::MouseButtonPress: {
-                emit userPanDetected();
                 auto *mouseEvent = static_cast<QMouseEvent *>(event);
+                if (mouseEvent->button() == Qt::RightButton) {
+                    m_rightDragActive = true;
+                    m_lastRightDragPos = mouseEvent->position();
+                    stopCameraAnimation();
+                    map()->setGestureInProgress(true);
+                    event->accept();
+                    return true;
+                }
+                emit userPanDetected();
                 if (mouseEvent->button() == Qt::LeftButton) {
                     QPointF screenPos = mouseEvent->position();
                     QMapLibre::Coordinate coord = map()->coordinateForPixel(screenPos);
@@ -151,11 +169,62 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 }
                 break;
             }
-            case QEvent::MouseMove:
+            case QEvent::MouseMove: {
+                if (m_rightDragActive) {
+                    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+                    QPointF currentPos = mouseEvent->position();
+                    qreal dx = currentPos.x() - m_lastRightDragPos.x();
+                    qreal dy = currentPos.y() - m_lastRightDragPos.y();
+
+                    if (std::abs(dy) > 0.5) {
+                        double pitchDelta = -dy * PITCH_SENSITIVITY;
+                        double newPitch = qBound(MIN_PITCH, map()->pitch() + pitchDelta, MAX_PITCH);
+                        map()->setPitch(newPitch);
+                        if (newPitch != m_lastPitch) {
+                            m_lastPitch = newPitch;
+                            emit tiltChanged(m_lastPitch);
+                        }
+                    }
+
+                    if (std::abs(dx) > 0.5) {
+                        QPointF center(m_glWidget->width() / 2.0, m_glWidget->height() / 2.0);
+                        qreal bearingDelta;
+                        if (std::abs(center.y() - m_lastRightDragPos.y()) > MIN_PIXEL_CENTER_THRESHOLD) {
+                            QPointF arcLast(m_lastRightDragPos.x(), currentPos.y());
+                            bearingDelta = getAngleDelta(arcLast, currentPos, center);
+                        } else {
+                            bearingDelta = dx * ROTATE_DEGREES_PER_PIXEL;
+                            if (currentPos.y() < center.y()) {
+                                bearingDelta = -bearingDelta;
+                            }
+                        }
+                        if (std::abs(bearingDelta) > 0.01) {
+                            double newBearing = map()->bearing() + bearingDelta;
+                            map()->setBearing(newBearing);
+                            if (newBearing != m_lastBearing) {
+                                m_lastBearing = newBearing;
+                                emit bearingChanged(m_lastBearing);
+                            }
+                        }
+                    }
+
+                    m_lastRightDragPos = currentPos;
+                    event->accept();
+                    return true;
+                }
                 emit userPanDetected();
                 break;
-            case QEvent::MouseButtonRelease:
+            }
+            case QEvent::MouseButtonRelease: {
+                auto *mouseEvent = static_cast<QMouseEvent *>(event);
+                if (mouseEvent->button() == Qt::RightButton && m_rightDragActive) {
+                    m_rightDragActive = false;
+                    map()->setGestureInProgress(false);
+                    event->accept();
+                    return true;
+                }
                 break;
+            }
             default:
                 break;
             }
