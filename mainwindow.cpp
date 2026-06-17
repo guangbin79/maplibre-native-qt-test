@@ -807,10 +807,16 @@ MainWindow::MainWindow(QWidget *parent)
     btnLocShow->setStyleSheet(QStringLiteral("QPushButton { background-color: #3F51B5; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
     scrollLayout->addWidget(btnLocShow);
     connect(btnLocShow, &QPushButton::clicked, this, [this]() {
+        static int clickCount = 0;
+        clickCount++;
         QImage icon(32, 32, QImage::Format_ARGB32);
         icon.fill(Qt::blue);
         m_locationIndicatorManager->setLocationIcon(icon);
-        m_locationIndicatorManager->setLocation({36.75, 3.05});
+        if (clickCount % 2 == 1) {
+            m_locationIndicatorManager->setLocation({36.75, 3.05});
+        } else {
+            m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+        }
         m_locationIndicatorManager->showLocation();
     });
 
