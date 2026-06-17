@@ -253,6 +253,7 @@ private:
     void applyFixedMode();
     void applyFreeMode();
     void updateOverlayRotation();
+    void updateIconAlignment();
     void repositionOverlay();
     void onAnimStep();
     void updateSourceToCoordinate(double lat, double lon);

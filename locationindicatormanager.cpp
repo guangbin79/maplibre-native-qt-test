@@ -171,14 +171,6 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                         QMetaObject::invokeMethod(this, [this]() {
                             m_selfAnimating = false;
                         }, Qt::QueuedConnection);
-                        if (m_fixedHeadingMode == FixedHeadingMode::NorthUp
-                            && m_state == State::FixedBrowsing
-                            && m_layerSetup && m_currentLocation.heading.has_value()) {
-                            double bearing = m_map->bearing();
-                            double compensated = m_currentLocation.heading.value() - bearing;
-                            m_map->setLayoutProperty("location-indicator-layer",
-                                                      "icon-rotate", compensated);
-                        }
                     }
                 });
     }
@@ -189,6 +181,7 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
     bool coordsChanged = (data.latitude != m_currentLocation.latitude
                           || data.longitude != m_currentLocation.longitude);
     bool headingChanged = (data.heading != m_currentLocation.heading);
+    bool headingPresenceChanged = (data.heading.has_value() != m_currentLocation.heading.has_value());
 
     m_currentLocation = data;
 
@@ -200,6 +193,9 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
 
     if (coordsChanged || headingChanged)
         emit locationChanged(m_currentLocation);
+
+    if (headingPresenceChanged && m_layerSetup && m_map)
+        updateIconAlignment();
 
     if (!m_ready)
         return;
@@ -224,11 +220,6 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
             if (m_mode == LocationMode::Free) {
                 m_map->setLayoutProperty("location-indicator-layer",
                                           "icon-rotate", m_rotation);
-            } else if (m_mode == LocationMode::Fixed && m_state != State::Hidden) {
-                if (m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
-                    m_map->setLayoutProperty("location-indicator-layer",
-                                              "icon-rotate", m_rotation);
-                }
             }
         }
 
@@ -243,6 +234,8 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
     m_followTargetLon = data.longitude;
     if (data.heading.has_value()) {
         m_targetBearing = data.heading.value();
+    } else {
+        m_targetBearing = -1.0;
     }
 
     // Record animation start positions for time-deadline interpolation
@@ -337,19 +330,10 @@ void LocationIndicatorManager::setFixedHeadingMode(FixedHeadingMode mode)
 
     if (m_layerSetup && m_map) {
         if (m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
-            m_map->setLayoutProperty("location-indicator-layer",
-                                      "icon-rotation-alignment", "map");
-            m_map->setLayoutProperty("location-indicator-layer",
-                                      "icon-rotate", m_rotation);
             if (m_map->bearing() != 0.0) {
                 m_selfAnimating = true;
                 m_map->setBearing(0.0);
             }
-        } else {
-            m_map->setLayoutProperty("location-indicator-layer",
-                                       "icon-rotation-alignment", "viewport");
-            m_map->setLayoutProperty("location-indicator-layer",
-                                        "icon-rotate", 0.0);
         }
     }
 
@@ -532,18 +516,12 @@ void LocationIndicatorManager::ensureLayerSetup()
     m_map->setLayoutProperty("location-indicator-layer",
                              "icon-allow-overlap", true);
     m_map->setLayoutProperty("location-indicator-layer",
-                             "icon-ignore-placement", true);
-    m_map->setLayoutProperty("location-indicator-layer",
-                              "icon-rotate",
-                              m_mode == LocationMode::Free ? m_rotation :
-                              (m_fixedHeadingMode == FixedHeadingMode::NorthUp ? m_rotation : 0.0));
-    m_map->setLayoutProperty("location-indicator-layer",
-                              "icon-rotation-alignment",
-                              m_fixedHeadingMode == FixedHeadingMode::NorthUp ? "map" : "viewport");
+                               "icon-ignore-placement", true);
     m_map->setLayoutProperty("location-indicator-layer",
                              "visibility", "none");
 
     m_layerSetup = true;
+    updateIconAlignment();
 
     if (!m_icon.isNull()) {
         const double dpr = QGuiApplication::primaryScreen()
@@ -805,6 +783,22 @@ void LocationIndicatorManager::updateOverlayRotation()
         m_overlay->setFixedSize(scaledW, scaledH);
     }
     repositionOverlay();
+}
+
+void LocationIndicatorManager::updateIconAlignment()
+{
+    if (!m_layerSetup || !m_map)
+        return;
+
+    if (m_currentLocation.heading.has_value()) {
+        m_map->setLayoutProperty("location-indicator-layer", "icon-rotation-alignment", "map");
+        m_map->setLayoutProperty("location-indicator-layer", "icon-pitch-alignment", "map");
+        m_map->setLayoutProperty("location-indicator-layer", "icon-rotate", m_currentLocation.heading.value());
+    } else {
+        m_map->setLayoutProperty("location-indicator-layer", "icon-rotation-alignment", "viewport");
+        m_map->setLayoutProperty("location-indicator-layer", "icon-pitch-alignment", "viewport");
+        m_map->setLayoutProperty("location-indicator-layer", "icon-rotate", 0.0);
+    }
 }
 
 void LocationIndicatorManager::repositionOverlay()
