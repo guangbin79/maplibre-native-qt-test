@@ -267,6 +267,7 @@ bool MapContainer::event(QEvent *event) {
         m_touchActive = true;
         m_touchPointCount = points.count();
         m_lastTouchPoints = points;
+        m_twoFingerGestureOccurred = false;
 
         // 双击检测：单指按下时检查是否与上次触摸结束构成双击
         if (m_touchPointCount == 1) {
@@ -275,12 +276,35 @@ bool MapContainer::event(QEvent *event) {
             qint64 timeDelta = pressTime - m_lastTouchEndTime;
             qreal dist = QLineF(pos, m_lastTouchEndPos).length();
             if (timeDelta > 0 && timeDelta < DOUBLE_TAP_INTERVAL_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
-                m_doubleTapAnimCenter = pos;
                 double targetZoom = qMin(map()->zoom() + 1.0, MAX_ZOOM);
-                QMapLibre::Coordinate center = screenToCoordinate(pos);
-                animateTo(center.first, center.second, targetZoom, map()->bearing(), map()->pitch(), 160);
+                QMapLibre::Coordinate anchorCoord = screenToCoordinate(pos);
+                QMapLibre::Coordinate currentCenter = map()->coordinate();
+                double zoomRatio = std::pow(2.0, targetZoom - map()->zoom());
+
+                // Longitude: linear in Web Mercator
+                double newLon = anchorCoord.second
+                              + (currentCenter.second - anchorCoord.second) / zoomRatio;
+
+                // Latitude: non-linear, requires convergence (moveLatLng equivalent)
+                double cosOld = std::cos(currentCenter.first * M_PI / 180.0);
+                double newLat = anchorCoord.first
+                              + (currentCenter.first - anchorCoord.first) / zoomRatio;
+                for (int i = 0; i < 5; ++i) {
+                    double cosNew = std::cos(newLat * M_PI / 180.0);
+                    newLat = anchorCoord.first
+                           + (currentCenter.first - anchorCoord.first) * cosNew / (zoomRatio * cosOld);
+                }
+
+                animateTo(newLat, newLon, targetZoom, map()->bearing(), map()->pitch(), 300);
                 m_touchActive = false;
                 event->accept();
+                QTimer::singleShot(350, this, [this]() {
+                    double newZoom = map()->zoom();
+                    if (newZoom != m_lastZoom) {
+                        m_lastZoom = newZoom;
+                        emit zoomChanged(m_lastZoom);
+                    }
+                });
                 return true;
             }
         }
@@ -361,6 +385,21 @@ bool MapContainer::event(QEvent *event) {
             }
             QPointF delta = points.first().position() - m_lastTouchPoints.first().position();
             map()->moveBy(delta);
+        // 1→2 过渡: 第二个手指刚加入，初始化双指点击检测参数
+        } else if (m_lastTouchPoints.count() == 1 && m_touchPointCount == 2) {
+            const QPointF &p1 = points.at(0).scenePosition();
+            const QPointF &p2 = points.at(1).scenePosition();
+            qint64 pressTs = 0;
+            for (const auto &pt : points) {
+                if (pt.state() == QEventPoint::State::Pressed) {
+                    pressTs = static_cast<qint64>(pt.pressTimestamp());
+                    break;
+                }
+            }
+            m_twoFingerTapStartTime = pressTs;
+            m_twoFingerTapStartPos1 = p1;
+            m_twoFingerTapStartPos2 = p2;
+            m_twoFingerTapInitialDist = QLineF(p1, p2).length();
         // 双指手势: 需要当前帧和上一帧都有两个触摸点
         } else if (m_touchPointCount == 2 && m_lastTouchPoints.count() >= 2) {
             const QPointF &p1 = points.at(0).position();
@@ -400,6 +439,9 @@ bool MapContainer::event(QEvent *event) {
                     m_gestureMode = GestureMode::Both;
                 }
             }
+
+            if (m_gestureMode != GestureMode::None)
+                m_twoFingerGestureOccurred = true;
 
             if (m_gestureMode == GestureMode::Pitch) {
                 QPointF currCenter = (p1 + p2) / 2.0;
@@ -519,7 +561,7 @@ bool MapContainer::event(QEvent *event) {
 
         // 双指点击缩小检测：两指同时轻触后快速抬起，无明显移动
         if (m_touchPointCount == 2
-            && m_gestureMode == GestureMode::None
+            && !m_twoFingerGestureOccurred
             && m_twoFingerTapStartTime > 0
             && !m_lastTouchPoints.isEmpty()
             && m_lastTouchPoints.count() >= 2) {
@@ -527,8 +569,8 @@ bool MapContainer::event(QEvent *event) {
             qint64 duration = endTime - m_twoFingerTapStartTime;
             if (duration > 0 && duration < TWO_FINGER_TAP_DURATION_MS) {
                 // 检查手指漂移距离
-                QPointF endPos1 = m_lastTouchPoints.at(0).position();
-                QPointF endPos2 = m_lastTouchPoints.at(1).position();
+                QPointF endPos1 = m_lastTouchPoints.at(0).scenePosition();
+                QPointF endPos2 = m_lastTouchPoints.at(1).scenePosition();
                 qreal drift1 = QLineF(m_twoFingerTapStartPos1, endPos1).length();
                 qreal drift2 = QLineF(m_twoFingerTapStartPos2, endPos2).length();
                 // 检查距离变化比例
@@ -539,13 +581,29 @@ bool MapContainer::event(QEvent *event) {
                 if (drift1 < TWO_FINGER_TAP_MAX_DRIFT_PX
                     && drift2 < TWO_FINGER_TAP_MAX_DRIFT_PX
                     && distRatio < TWO_FINGER_TAP_DIST_CHANGE_RATIO) {
-                    // 检测到双指点击 → 缩小 1 级
+                    // 检测到双指点击 → 缩小 1 级（zoom-to-cursor，手动数学计算）
+                    QPointF centerPos = (m_twoFingerTapStartPos1 + m_twoFingerTapStartPos2) / 2.0;
+                    QMapLibre::Coordinate anchorCoord = screenToCoordinate(centerPos);
                     double targetZoom = qMax(map()->zoom() - 1.0, 0.0);
                     if (targetZoom < map()->zoom()) {
-                        QPointF centerPos = (m_twoFingerTapStartPos1 + m_twoFingerTapStartPos2) / 2.0;
-                        QMapLibre::Coordinate center = screenToCoordinate(centerPos);
-                        animateTo(center.first, center.second, targetZoom, map()->bearing(), map()->pitch(), 160);
+                        QMapLibre::Coordinate currentCenter = map()->coordinate();
+                        double zoomRatio = std::pow(2.0, targetZoom - map()->zoom());
+                        double newLon = anchorCoord.second + (currentCenter.second - anchorCoord.second) / zoomRatio;
+                        double cosOld = std::cos(currentCenter.first * M_PI / 180.0);
+                        double newLat = anchorCoord.first + (currentCenter.first - anchorCoord.first) / zoomRatio;
+                        for (int i = 0; i < 5; ++i) {
+                            double cosNew = std::cos(newLat * M_PI / 180.0);
+                            newLat = anchorCoord.first + (currentCenter.first - anchorCoord.first) * cosNew / (zoomRatio * cosOld);
+                        }
+                        animateTo(newLat, newLon, targetZoom, map()->bearing(), map()->pitch(), 300);
                     }
+                    QTimer::singleShot(350, this, [this]() {
+                        double newZoom = map()->zoom();
+                        if (newZoom != m_lastZoom) {
+                            m_lastZoom = newZoom;
+                            emit zoomChanged(m_lastZoom);
+                        }
+                    });
                     // 防止手指抬起触发单指双击放大（交叉触发防护）
                     m_lastTouchEndTime = 0;
                     // 完整状态重置后提前返回
@@ -557,6 +615,7 @@ bool MapContainer::event(QEvent *event) {
                     m_rotationSkipCounter = 0;
                     m_panSkipCounter = 0;
                     m_twoFingerTapStartTime = 0;
+                    m_twoFingerGestureOccurred = false;
                     map()->setGestureInProgress(false);
                     emit touchEnd();
                     event->accept();
@@ -573,6 +632,7 @@ bool MapContainer::event(QEvent *event) {
         m_accumulatedRotation = 0.0;
         m_rotationSkipCounter = 0;
         m_panSkipCounter = 0;
+        m_twoFingerGestureOccurred = false;
         map()->setGestureInProgress(false);
         emit touchEnd();
         event->accept();

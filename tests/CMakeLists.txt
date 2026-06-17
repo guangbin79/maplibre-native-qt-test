@@ -133,7 +133,7 @@ add_executable(tst_gui tst_gui.cpp
 target_include_directories(tst_gui PRIVATE ${CMAKE_SOURCE_DIR} ${HXGISSERVER_INCLUDE_DIR} ${TTSPLAYER_INCLUDE_DIR})
 target_link_directories(tst_gui PRIVATE ${HXGISSERVER_DIR} ${TTSPLAYER_LIB_DIR})
 target_link_libraries(tst_gui PRIVATE
-    Qt6::Test Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets
+    Qt6::Test Qt6::Core Qt6::GuiPrivate Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets
     QMapLibre::Widgets QMapLibre::Core
     plugin-HXGISServer
     ttsplayer sherpa-onnx-c-api onnxruntime

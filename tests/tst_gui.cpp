@@ -6,6 +6,13 @@
 #include <QPainter>
 #include <QDir>
 #include <QCoreApplication>
+#include <QTouchEvent>
+#include <QPointingDevice>
+#include <QInputDevice>
+#include <QtGui/private/qeventpoint_p.h>
+#include <QElapsedTimer>
+#include <QMap>
+#include <memory>
 
 #include <QMapLibre/Map>
 
@@ -49,6 +56,11 @@ private slots:
     void testLocationHeadingUp();
     void testLocationNorthUp();
     void testLocationSimulatedNavigation();
+    void testTouchInfra();
+    void testTouchPinchZoomRegression();
+    void testTouchDoubleTapZoomInZoomToCursor();
+    void testTouchTwoFingerTapZoomOutTriggers();
+    void testTouchDoubleTapDoesNotRecenter();
 
 private:
     MainWindow *m_window = nullptr;
@@ -57,8 +69,15 @@ private:
     TestRunner *m_runner = nullptr;
     HXGISServer *g_server = nullptr;
 
+    QPointingDevice* m_touchDevice = nullptr;
+    QElapsedTimer m_touchTimer;
+    QMap<int, qint64> m_pointPressTimestamps;
+
     void captureScreenshot(const QString &name);
     void log(const QString &msg);
+
+    std::unique_ptr<QTouchEvent> buildTouchEvent(QEvent::Type type, const QList<QPair<QEventPoint::State, QPointF>>& statePosPairs, qint64 timestampMs);
+    void sendTouch(MapContainer* m, const QTouchEvent& e);
 
     QMapLibre::Coordinate getMapCenter() const;
 };
@@ -78,6 +97,10 @@ void GuiTest::initTestCase()
     m_window->resize(800, 600);
     m_window->show();
     QTest::qWait(500);
+
+    m_touchDevice = QTest::createTouchDevice(QInputDevice::DeviceType::TouchScreen);
+    QVERIFY(m_touchDevice != nullptr);
+    m_touchTimer.start();
 
     m_map = m_window->findChild<MapContainer*>();
     QVERIFY(m_map != nullptr);
@@ -1146,6 +1169,326 @@ void GuiTest::testLocationSimulatedNavigation()
     m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
     m_locationIndicatorManager->hideLocation();
     QTest::qWait(500);
+}
+
+std::unique_ptr<QTouchEvent> GuiTest::buildTouchEvent(QEvent::Type type, const QList<QPair<QEventPoint::State, QPointF>>& statePosPairs, qint64 timestampMs)
+{
+    QList<QEventPoint> points;
+    for (int i = 0; i < statePosPairs.size(); ++i) {
+        const auto& pair = statePosPairs[i];
+        QEventPoint::State state = pair.first;
+        QPointF pos = pair.second;
+
+        QEventPoint pt(i, state, pos, m_map->mapToGlobal(pos));
+        QMutableEventPoint::setTimestamp(pt, timestampMs);
+        if (state == QEventPoint::State::Pressed) {
+            QMutableEventPoint::setPressTimestamp(pt, timestampMs);
+            m_pointPressTimestamps[i] = timestampMs;
+        }
+        points.append(pt);
+    }
+
+    return std::make_unique<QTouchEvent>(type, m_touchDevice, Qt::NoModifier, points);
+}
+
+void GuiTest::sendTouch(MapContainer* m, const QTouchEvent& e)
+{
+    QCoreApplication::sendEvent(m, const_cast<QTouchEvent*>(&e));
+}
+
+void GuiTest::testTouchInfra()
+{
+    log("testTouchInfra: sending single TouchBegin event");
+
+    if (QGuiApplication::platformName() == "wayland")
+        QSKIP("QTBUG-107157");
+
+    QVERIFY(QTest::qWaitForWindowExposed(m_window->windowHandle()));
+    QVERIFY2(m_map->testAttribute(Qt::WA_AcceptTouchEvents), "MapContainer must accept touch");
+
+    QPointF center = m_map->rect().center();
+    qint64 ts = m_touchTimer.elapsed();
+
+    QList<QPair<QEventPoint::State, QPointF>> statePosPairs;
+    statePosPairs.append({QEventPoint::State::Pressed, center});
+
+    auto ev = buildTouchEvent(QEvent::TouchBegin, statePosPairs, ts);
+    sendTouch(m_map, *ev);
+
+    QTest::qWait(500);
+    log("testTouchInfra: PASSED - no crash");
+}
+
+void GuiTest::testTouchPinchZoomRegression()
+{
+    log("testTouchPinchZoomRegression: two-finger spread → zoom in");
+
+    if (QGuiApplication::platformName() == "wayland")
+        QSKIP("QTBUG-107157");
+
+    QVERIFY(QTest::qWaitForWindowExposed(m_window->windowHandle()));
+    QVERIFY2(m_map->testAttribute(Qt::WA_AcceptTouchEvents), "MapContainer must accept touch");
+
+    m_map->setZoom(8.0);
+    for (int retry = 0; retry < 30 && qAbs(m_map->map()->zoom() - 8.0) > 0.01; ++retry) {
+        QTest::qWait(500);
+        m_map->setZoom(8.0);
+    }
+    double zoomBefore = m_map->map()->zoom();
+    QCOMPARE(zoomBefore, 8.0);
+
+    const qreal w = m_map->width();
+    const qreal h = m_map->height();
+    const QPointF f1Start(w * 0.45, h * 0.5);
+    const QPointF f2Start(w * 0.55, h * 0.5);
+    const QPointF f1End(w * 0.35, h * 0.5);
+    const QPointF f2End(w * 0.65, h * 0.5);
+
+    qint64 t0 = m_touchTimer.elapsed();
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Pressed, f1Start});
+        auto ev = buildTouchEvent(QEvent::TouchBegin, pts, t0);
+        sendTouch(m_map, *ev);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Stationary, f1Start});
+        pts.append({QEventPoint::State::Pressed, f2Start});
+        auto ev = buildTouchEvent(QEvent::TouchUpdate, pts, t0 + 20);
+        sendTouch(m_map, *ev);
+    }
+
+    auto lerp = [](const QPointF& a, const QPointF& b, qreal t) -> QPointF {
+        return QPointF(a.x() + (b.x() - a.x()) * t, a.y() + (b.y() - a.y()) * t);
+    };
+
+    for (int step = 1; step <= 4; ++step) {
+        qreal frac = step / 4.0;
+        QPointF p1 = lerp(f1Start, f1End, frac);
+        QPointF p2 = lerp(f2Start, f2End, frac);
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Stationary, p1});
+        pts.append({QEventPoint::State::Stationary, p2});
+        auto ev = buildTouchEvent(QEvent::TouchUpdate, pts, t0 + step * 30);
+        sendTouch(m_map, *ev);
+        QTest::qWait(10);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Released, f1End});
+        pts.append({QEventPoint::State::Released, f2End});
+        auto ev = buildTouchEvent(QEvent::TouchEnd, pts, t0 + 150);
+        sendTouch(m_map, *ev);
+    }
+
+    QTest::qWait(500);
+
+    double zoomAfter = m_map->map()->zoom();
+    QVERIFY2(zoomAfter > 8.0,
+              qPrintable(QString("Expected zoom > 8.0 after pinch spread, got %1").arg(zoomAfter)));
+
+    log(qPrintable(QString("testTouchPinchZoomRegression: PASSED — zoom %1 → %2")
+                   .arg(zoomBefore).arg(zoomAfter)));
+}
+
+void GuiTest::testTouchDoubleTapZoomInZoomToCursor()
+{
+    log("testTouchDoubleTapZoomInZoomToCursor: double-tap off-center → zoom, anchor held");
+
+    if (QGuiApplication::platformName() == "wayland")
+        QSKIP("QTBUG-107157");
+
+    QVERIFY(QTest::qWaitForWindowExposed(m_window->windowHandle()));
+    QVERIFY2(m_map->testAttribute(Qt::WA_AcceptTouchEvents), "MapContainer must accept touch");
+
+    m_map->setZoom(8.0);
+    for (int retry = 0; retry < 30 && qAbs(m_map->map()->zoom() - 8.0) > 0.01; ++retry) {
+        QTest::qWait(500);
+        m_map->setZoom(8.0);
+    }
+    QCOMPARE(m_map->map()->zoom(), 8.0);
+
+    const qreal w = m_map->width();
+    const qreal h = m_map->height();
+    const QPointF TAP(w * 0.3, h * 0.3);
+
+    QMapLibre::Coordinate tapCoordBefore = m_map->screenToCoordinate(TAP);
+
+    qint64 t0 = m_touchTimer.elapsed();
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Pressed, TAP});
+        auto evDown = buildTouchEvent(QEvent::TouchBegin, pts, t0);
+        sendTouch(m_map, *evDown);
+
+        pts[0].first = QEventPoint::State::Released;
+        auto evUp = buildTouchEvent(QEvent::TouchEnd, pts, t0 + 30);
+        sendTouch(m_map, *evUp);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Pressed, TAP});
+        auto evDown = buildTouchEvent(QEvent::TouchBegin, pts, t0 + 180);
+        sendTouch(m_map, *evDown);
+
+        pts[0].first = QEventPoint::State::Released;
+        auto evUp = buildTouchEvent(QEvent::TouchEnd, pts, t0 + 210);
+        sendTouch(m_map, *evUp);
+    }
+
+    QTest::qWait(500);
+
+    double zoomAfter = m_map->map()->zoom();
+    QVERIFY2(zoomAfter > 8.5 && zoomAfter < 10.0,
+             qPrintable(QString("Expected zoom ~9.0 after double-tap, got %1").arg(zoomAfter)));
+
+    QMapLibre::Coordinate tapCoordAfter = m_map->screenToCoordinate(TAP);
+    qreal latDrift = std::abs(tapCoordAfter.first - tapCoordBefore.first);
+    qreal lonDrift = std::abs(tapCoordAfter.second - tapCoordBefore.second);
+
+    QVERIFY2(latDrift < 0.3 && lonDrift < 0.3,
+             qPrintable(QString("Anchor drift: lat=%1° lon=%2° — double-tap recentered the map!")
+                        .arg(latDrift, 0, 'f', 8).arg(lonDrift, 0, 'f', 8)));
+
+    log("testTouchDoubleTapZoomInZoomToCursor: PASSED — zoom-to-cursor math holds anchor within 0.3°");
+}
+
+void GuiTest::testTouchTwoFingerTapZoomOutTriggers()
+{
+    log("testTouchTwoFingerTapZoomOutTriggers: two-finger tap → zoom out");
+
+    if (QGuiApplication::platformName() == "wayland")
+        QSKIP("QTBUG-107157");
+
+    QVERIFY(QTest::qWaitForWindowExposed(m_window->windowHandle()));
+    QVERIFY2(m_map->testAttribute(Qt::WA_AcceptTouchEvents), "MapContainer must accept touch");
+
+    m_map->setZoom(8.0);
+    for (int retry = 0; retry < 30 && qAbs(m_map->map()->zoom() - 8.0) > 0.01; ++retry) {
+        QTest::qWait(500);
+        m_map->setZoom(8.0);
+    }
+    QCOMPARE(m_map->map()->zoom(), 8.0);
+
+    const qreal w = m_map->width();
+    const qreal h = m_map->height();
+    const QPointF F1(w * 0.4, h * 0.5);
+    const QPointF F2(w * 0.6, h * 0.5);
+
+    qint64 t0 = m_touchTimer.elapsed();
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Pressed, F1});
+        auto ev = buildTouchEvent(QEvent::TouchBegin, pts, t0);
+        sendTouch(m_map, *ev);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Stationary, F1});
+        pts.append({QEventPoint::State::Pressed, F2});
+        auto ev = buildTouchEvent(QEvent::TouchUpdate, pts, t0 + 20);
+        sendTouch(m_map, *ev);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Stationary, F1});
+        pts.append({QEventPoint::State::Stationary, F2});
+        auto ev = buildTouchEvent(QEvent::TouchUpdate, pts, t0 + 60);
+        sendTouch(m_map, *ev);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Released, F1});
+        pts.append({QEventPoint::State::Released, F2});
+        auto ev = buildTouchEvent(QEvent::TouchEnd, pts, t0 + 90);
+        sendTouch(m_map, *ev);
+    }
+
+    QTest::qWait(500);
+
+    double zoomAfter = m_map->map()->zoom();
+    QVERIFY2(zoomAfter < 7.5,
+             qPrintable(QString("Expected zoom < 7.5 after two-finger-tap, got %1").arg(zoomAfter)));
+
+    log("testTouchTwoFingerTapZoomOutTriggers: PASSED — two-finger-tap zoom-out fired");
+}
+
+void GuiTest::testTouchDoubleTapDoesNotRecenter()
+{
+    log("testTouchDoubleTapDoesNotRecenter: double-tap off-center should not move map center");
+
+    if (QGuiApplication::platformName() == "wayland")
+        QSKIP("QTBUG-107157");
+
+    QVERIFY(QTest::qWaitForWindowExposed(m_window->windowHandle()));
+    QVERIFY2(m_map->testAttribute(Qt::WA_AcceptTouchEvents), "MapContainer must accept touch");
+
+    m_map->setZoom(8.0);
+    QTest::qWait(100);
+    QCOMPARE(m_map->map()->zoom(), 8.0);
+
+    const qreal w = m_map->width();
+    const qreal h = m_map->height();
+    const QPointF TAP(w * 0.3, h * 0.3);
+
+    QMapLibre::Coordinate centerBefore = getMapCenter();
+    QMapLibre::Coordinate tapCoord = m_map->screenToCoordinate(TAP);
+
+    qreal initialSeparation = std::abs(centerBefore.first - tapCoord.first)
+                             + std::abs(centerBefore.second - tapCoord.second);
+    QVERIFY2(initialSeparation > 0.01,
+             "Test precondition failed: off-center tap point differs from map center");
+
+    qint64 t0 = m_touchTimer.elapsed();
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Pressed, TAP});
+        auto evDown = buildTouchEvent(QEvent::TouchBegin, pts, t0);
+        sendTouch(m_map, *evDown);
+
+        pts[0].first = QEventPoint::State::Released;
+        auto evUp = buildTouchEvent(QEvent::TouchEnd, pts, t0 + 30);
+        sendTouch(m_map, *evUp);
+    }
+
+    {
+        QList<QPair<QEventPoint::State, QPointF>> pts;
+        pts.append({QEventPoint::State::Pressed, TAP});
+        auto evDown = buildTouchEvent(QEvent::TouchBegin, pts, t0 + 180);
+        sendTouch(m_map, *evDown);
+
+        pts[0].first = QEventPoint::State::Released;
+        auto evUp = buildTouchEvent(QEvent::TouchEnd, pts, t0 + 210);
+        sendTouch(m_map, *evUp);
+    }
+
+    QTest::qWait(500);
+
+    double zoomAfter = m_map->map()->zoom();
+    QVERIFY2(zoomAfter > 8.5,
+             qPrintable(QString("Double-tap did not fire, test invalid — zoom still %1").arg(zoomAfter)));
+
+    QMapLibre::Coordinate centerAfter = getMapCenter();
+
+    qreal centerDrift = std::abs(centerAfter.first - tapCoord.first)
+                       + std::abs(centerAfter.second - tapCoord.second);
+    QVERIFY2(centerDrift > 0.1,
+             qPrintable(QString("Map center drifted to tap point! Distance = %1° — "
+                                "double-tap should NOT recenter")
+                        .arg(centerDrift, 0, 'f', 6)));
+
+    log("testTouchDoubleTapDoesNotRecenter: PASSED — zoom-to-cursor preserves map center");
 }
 
 QTEST_MAIN(GuiTest)

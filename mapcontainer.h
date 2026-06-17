@@ -1080,6 +1080,7 @@ private:
     static constexpr qint64 TWO_FINGER_TAP_DURATION_MS = 300;   ///< 双指点击最大持续时间（毫秒）
     static constexpr qreal TWO_FINGER_TAP_MAX_DRIFT_PX = 30.0;  ///< 双指点击最大手指漂移距离（像素）
     static constexpr qreal TWO_FINGER_TAP_DIST_CHANGE_RATIO = 0.15; ///< 双指点击最大距离变化比例（15%）
+    bool m_twoFingerGestureOccurred = false; ///< True when a real 2-finger gesture (pinch/rotate/pitch) was detected
 
     // 双击放大
     QPointF m_doubleTapAnimCenter;            ///< 双击放大的中心点
