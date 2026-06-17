@@ -36,7 +36,6 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
     m_resumeTimer = new QTimer(this);
     m_resumeTimer->setSingleShot(true);
     connect(m_resumeTimer, &QTimer::timeout, this, [this]() {
-        qDebug() << "[FB-RESUME] resume timer fired, state=" << static_cast<int>(m_state);
         m_followingPaused = false;
 
         if (!m_map || m_state != State::FixedBrowsing)
@@ -134,10 +133,6 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                     } else if (change == QMapLibre::Map::MapChangeRegionWillChange) {
                         if (m_state == State::FixedFollowing && !m_selfAnimating) {
                             m_state = State::FixedBrowsing;
-                            qDebug() << "[FB-ENTER] FixedFollowing→FixedBrowsing"
-                                     << " mapCenter=(" << m_map->coordinate().first << m_map->coordinate().second << ")"
-                                     << " GPS=(" << m_currentLocation.latitude << m_currentLocation.longitude << ")"
-                                     << " selfAnim=" << m_selfAnimating;
 
                             m_followingPaused = true;
                             if (m_animTimer)
@@ -153,7 +148,6 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                             if (m_layerSetup && m_map) {
                                 m_displayLat = m_currentLocation.latitude;
                                 m_displayLon = m_currentLocation.longitude;
-                                qDebug() << "[FB-ENTER-GPS] GPS=(" << m_displayLat << m_displayLon << ")";
                                 updateSourceToCoordinate(m_displayLat, m_displayLon);
                                 m_map->setLayoutProperty("location-indicator-layer",
                                                            "visibility", "visible");
@@ -167,7 +161,6 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                         // If reset synchronously, the 2nd/3rd/4th operation would be
                         // mistaken for a user drag, hiding the overlay.
                         QMetaObject::invokeMethod(this, [this]() {
-                            qDebug() << "[SELF-ANIM-RESET] m_selfAnimating=false, state=" << static_cast<int>(m_state);
                             m_selfAnimating = false;
                         }, Qt::QueuedConnection);
                         // FixedBrowsing 状态下，任何地图变化都重启 resume timer
@@ -208,9 +201,6 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
 
         if (m_state == State::FreeVisible || m_state == State::FixedBrowsing) {
             if (coordsChanged && m_animTimer && !m_animTimer->isActive()) {
-                qDebug() << "[FB-SETLOC] coordsChanged=" << coordsChanged
-                         << " startAnim, display=(" << m_displayLat << m_displayLon << ")"
-                         << " target=(" << m_currentLocation.latitude << m_currentLocation.longitude << ")";
                 m_animTimer->start();
             }
             else if (!m_animTimer || !m_animTimer->isActive())
@@ -694,11 +684,6 @@ void LocationIndicatorManager::onAnimStep()
 
         double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
         double lon = m_followStartLon + (m_followTargetLon - m_followStartLon) * eased;
-        qDebug() << "[FF-ANIM] progress=" << progress
-                 << " mapCoord=(" << lat << lon << ")"
-                 << " target=(" << m_followTargetLat << m_followTargetLon << ")"
-                 << " bearing=" << m_map->bearing()
-                 << " selfAnim=" << m_selfAnimating;
         m_selfAnimating = true;
         safeSetCoordinate(lat, lon);
 
@@ -739,11 +724,6 @@ void LocationIndicatorManager::onAnimStep()
 
         m_displayLat = m_iconStartLat + (m_currentLocation.latitude - m_iconStartLat) * eased;
         m_displayLon = m_iconStartLon + (m_currentLocation.longitude - m_iconStartLon) * eased;
-        qDebug() << "[ANIM-STEP] state=" << static_cast<int>(m_state)
-                 << " progress=" << progress
-                 << " display=(" << m_displayLat << m_displayLon << ")"
-                 << " start=(" << m_iconStartLat << m_iconStartLon << ")"
-                 << " target=(" << m_currentLocation.latitude << m_currentLocation.longitude << ")";
         updateSourceToCoordinate(m_displayLat, m_displayLon);
     }
 }
