@@ -1056,7 +1056,7 @@ private:
 
     // 倾斜手势参数
     static constexpr double MIN_PITCH = 0.0;   ///< 最小倾斜角度
-    static constexpr double MAX_PITCH = 30.0;  ///< 最大倾斜角度(限制以减少瓦片加载)
+    static constexpr double MAX_PITCH = 60.0;  ///< 最大倾斜角度(行业标准,配合 ConstrainMode 控制瓦片)
     static constexpr qreal PITCH_SENSITIVITY = 0.15; ///< 倾斜灵敏度系数
 
     // 右键拖拽旋转参数（参考 maplibre-gl MouseRotateHandler）

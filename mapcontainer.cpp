@@ -42,8 +42,10 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // 坐标顺序为 (纬度, 经度)
     settings.setDefaultCoordinate(config.defaultCoordinate);
     settings.setDefaultZoom(config.defaultZoom);
-    // 限制 tile 缓存数据库大小为 50MB
+    // 限制 tile 缓存数据库大小
     settings.setCacheDatabaseMaximumSize(200 * 1024 * 1024);
+    // 约束渲染区域:pitch 变大时远处不渲染,限制瓦片数量
+    settings.setConstrainMode(QMapLibre::Settings::ConstrainWidthAndHeight);
     if (!config.styleUrl.isEmpty()) {
         settings.setStyles(QMapLibre::Styles{
             QMapLibre::Style(config.styleUrl, QStringLiteral("HXGIS Day"))
