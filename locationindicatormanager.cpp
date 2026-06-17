@@ -146,12 +146,19 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                                 m_overlay->hide();
 
                             if (m_layerSetup && m_map) {
-                                // 图标直接固定在 GPS 坐标,不做过渡动画
-                                m_displayLat = m_currentLocation.latitude;
-                                m_displayLon = m_currentLocation.longitude;
+                                // Start icon at current map center (where overlay was),
+                                // then animate to GPS position — smooth transition
+                                auto coord = m_map->coordinate();
+                                m_displayLat = coord.first;
+                                m_displayLon = coord.second;
+                                m_iconStartLat = coord.first;
+                                m_iconStartLon = coord.second;
+                                m_iconStartTime = QDateTime::currentMSecsSinceEpoch();
                                 updateSourceToCoordinate(m_displayLat, m_displayLon);
                                 m_map->setLayoutProperty("location-indicator-layer",
                                                            "visibility", "visible");
+                                if (m_animTimer && !m_animTimer->isActive())
+                                    m_animTimer->start();
                             }
                         }
                     } else if (change == QMapLibre::Map::MapChangeRegionDidChange
