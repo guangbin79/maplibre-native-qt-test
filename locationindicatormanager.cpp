@@ -217,10 +217,8 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
     if (data.heading.has_value()) {
         m_rotation = data.heading.value();
         if (m_layerSetup && m_map) {
-            if (m_mode == LocationMode::Free) {
-                m_map->setLayoutProperty("location-indicator-layer",
-                                          "icon-rotate", m_rotation);
-            }
+            m_map->setLayoutProperty("location-indicator-layer",
+                                      "icon-rotate", m_rotation);
         }
 
         if (m_state == State::FixedFollowing && m_overlay && headingChanged
