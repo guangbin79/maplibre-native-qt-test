@@ -170,6 +170,10 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                             qDebug() << "[SELF-ANIM-RESET] m_selfAnimating=false, state=" << static_cast<int>(m_state);
                             m_selfAnimating = false;
                         }, Qt::QueuedConnection);
+                        // FixedBrowsing 状态下，任何地图变化都重启 resume timer
+                        // 覆盖旋转/俯视等不触发 pauseFollowing 的手势
+                        if (m_state == State::FixedBrowsing && !m_selfAnimating && m_resumeTimer)
+                            m_resumeTimer->start();
                     }
                 });
     }
