@@ -151,22 +151,12 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                                 m_overlay->hide();
 
                             if (m_layerSetup && m_map) {
-                                // Start icon at current map center (where overlay was),
-                                // then animate to GPS position — smooth transition
-                                auto coord = m_map->coordinate();
-                                m_displayLat = coord.first;
-                                m_displayLon = coord.second;
-                                m_iconStartLat = coord.first;
-                                m_iconStartLon = coord.second;
-                                m_iconStartTime = QDateTime::currentMSecsSinceEpoch();
-                                qDebug() << "[FB-ICON-START] iconStart=(" << m_iconStartLat << m_iconStartLon << ")"
-                                         << " target=(" << m_currentLocation.latitude << m_currentLocation.longitude << ")"
-                                         << " animStarted=" << (m_animTimer && m_animTimer->isActive());
+                                m_displayLat = m_currentLocation.latitude;
+                                m_displayLon = m_currentLocation.longitude;
+                                qDebug() << "[FB-ENTER-GPS] GPS=(" << m_displayLat << m_displayLon << ")";
                                 updateSourceToCoordinate(m_displayLat, m_displayLon);
                                 m_map->setLayoutProperty("location-indicator-layer",
                                                            "visibility", "visible");
-                                if (m_animTimer && !m_animTimer->isActive())
-                                    m_animTimer->start();
                             }
                         }
                     } else if (change == QMapLibre::Map::MapChangeRegionDidChange
