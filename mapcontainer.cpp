@@ -402,10 +402,10 @@ bool MapContainer::event(QEvent *event) {
             m_twoFingerTapInitialDist = QLineF(p1, p2).length();
         // 双指手势: 需要当前帧和上一帧都有两个触摸点
         } else if (m_touchPointCount == 2 && m_lastTouchPoints.count() >= 2) {
-            const QPointF &p1 = points.at(0).position();
-            const QPointF &p2 = points.at(1).position();
-            const QPointF &prevP1 = m_lastTouchPoints.at(0).position();
-            const QPointF &prevP2 = m_lastTouchPoints.at(1).position();
+            const QPointF &p1 = points.at(0).scenePosition();
+            const QPointF &p2 = points.at(1).scenePosition();
+            const QPointF &prevP1 = m_lastTouchPoints.at(0).scenePosition();
+            const QPointF &prevP2 = m_lastTouchPoints.at(1).scenePosition();
 
             // 如果初始 pinch 参数未初始化（TouchBegin 只有 1 个点），在这里补初始化
             if (m_initialPinchDist <= 0.0) {
@@ -440,8 +440,17 @@ bool MapContainer::event(QEvent *event) {
                 }
             }
 
-            if (m_gestureMode != GestureMode::None)
-                m_twoFingerGestureOccurred = true;
+            if (m_gestureMode != GestureMode::None) {
+                qreal gestureCurrDist = QLineF(p1, p2).length();
+                qreal gestureCurrAngle = QLineF(p1, p2).angle();
+                qreal gestureDistChange = std::abs(gestureCurrDist - m_initialPinchDist) / m_initialPinchDist;
+                qreal gestureAngleChange = gestureCurrAngle - m_initialPinchAngle;
+                while (gestureAngleChange > 180.0) gestureAngleChange -= 360.0;
+                while (gestureAngleChange < -180.0) gestureAngleChange += 360.0;
+                gestureAngleChange = std::abs(gestureAngleChange);
+                if (gestureDistChange > 0.12 || gestureAngleChange > 8.0)
+                    m_twoFingerGestureOccurred = true;
+            }
 
             if (m_gestureMode == GestureMode::Pitch) {
                 QPointF currCenter = (p1 + p2) / 2.0;
@@ -616,6 +625,7 @@ bool MapContainer::event(QEvent *event) {
                     m_panSkipCounter = 0;
                     m_twoFingerTapStartTime = 0;
                     m_twoFingerGestureOccurred = false;
+                    m_initialPinchDist = 0.0;
                     map()->setGestureInProgress(false);
                     emit touchEnd();
                     event->accept();
@@ -633,6 +643,7 @@ bool MapContainer::event(QEvent *event) {
         m_rotationSkipCounter = 0;
         m_panSkipCounter = 0;
         m_twoFingerGestureOccurred = false;
+        m_initialPinchDist = 0.0;
         map()->setGestureInProgress(false);
         emit touchEnd();
         event->accept();
