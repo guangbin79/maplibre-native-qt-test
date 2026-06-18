@@ -677,6 +677,18 @@ LocationIndicatorManager::IconFrame LocationIndicatorManager::computeIconFrame(q
     return {lat, lon, progress, progress >= 1.0};
 }
 
+void LocationIndicatorManager::maybeEmitVisualLocation(double lat, double lon)
+{
+    if (m_visualLocationInitialized
+        && qAbs(lat - m_lastVisualLat) < 1e-9
+        && qAbs(lon - m_lastVisualLon) < 1e-9)
+        return;  // identical value — suppress spam
+    m_lastVisualLat = lat;
+    m_lastVisualLon = lon;
+    m_visualLocationInitialized = true;
+    emit visualLocationChanged(lat, lon);
+}
+
 void LocationIndicatorManager::onAnimStep()
 {
     if (!m_map)
@@ -687,6 +699,7 @@ void LocationIndicatorManager::onAnimStep()
     if (m_state == State::FixedFollowing && !m_followingPaused) {
         auto frame = computeFollowingFrame(now);
         safeSetCoordinate(frame.lat, frame.lon);
+        maybeEmitVisualLocation(frame.lat, frame.lon);
 
         if (m_targetBearing >= 0) {
             if (m_fixedHeadingMode == FixedHeadingMode::HeadingUp) {
@@ -723,6 +736,7 @@ void LocationIndicatorManager::onAnimStep()
         m_displayLat = frame.lat;
         m_displayLon = frame.lon;
         updateSourceToCoordinate(m_displayLat, m_displayLon);
+        maybeEmitVisualLocation(frame.lat, frame.lon);
     }
 }
 

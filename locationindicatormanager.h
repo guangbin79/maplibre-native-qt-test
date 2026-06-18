@@ -288,8 +288,7 @@ protected:
     FollowingFrame computeFollowingFrame(qint64 now) const;
     IconFrame computeIconFrame(qint64 now) const;
 
-    // Stub — Task 3 replaces with real implementation (spam suppression + emit)
-    void maybeEmitVisualLocation(double lat, double lon) { (void)lat; (void)lon; }
+    void maybeEmitVisualLocation(double lat, double lon);
 
     bool eventFilter(QObject* watched, QEvent* event) override;
 
@@ -333,6 +332,11 @@ protected:
     double m_displayLat = 0.0;
     double m_displayLon = 0.0;
     bool m_displayInitialized = false;
+
+    // spam suppression for visualLocationChanged
+    double m_lastVisualLat = 0.0;
+    double m_lastVisualLon = 0.0;
+    bool m_visualLocationInitialized = false;
 
     // Overlay widget for Fixed mode (screen-pinned icon)
     QLabel *m_overlay = nullptr;

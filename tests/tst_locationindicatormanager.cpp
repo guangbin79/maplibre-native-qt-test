@@ -554,12 +554,12 @@ void TestLocationIndicatorManager::testVisualLocationSpamSuppression()
     QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
     QVERIFY(spy.isValid());
 
-    // Call twice with the same coordinates → stub emits neither
+    // Call twice with the same coordinates → first emits, second suppressed
     mgr.maybeEmitVisualLocation(39.9, 116.4);
     mgr.maybeEmitVisualLocation(39.9, 116.4);
 
-    // Stub is no-op → count stays 0 → this test may PASS (RED vulnerability)
-    QCOMPARE(spy.count(), 0);
+    // Real impl: first call emits, second is duplicate-suppressed
+    QCOMPARE(spy.count(), 1);
 }
 
 void TestLocationIndicatorManager::testVisualLocationInterpolationMidpoint()
@@ -593,8 +593,8 @@ void TestLocationIndicatorManager::testVisualLocationNoEmitWhenComplete()
     mgr.maybeEmitVisualLocation(40.0, 116.5);
     mgr.maybeEmitVisualLocation(40.0, 116.5);
 
-    // Stub is no-op → no emit, test may PASS (RED vulnerability — real impl should suppress)
-    QCOMPARE(spy.count(), 0);
+    // Real impl: first call emits, second is duplicate-suppressed
+    QCOMPARE(spy.count(), 1);
 }
 
 QTEST_MAIN(TestLocationIndicatorManager)
