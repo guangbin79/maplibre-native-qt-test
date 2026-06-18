@@ -15,6 +15,7 @@
 #include <QPainter>
 #include <QtMath>
 #include <QDateTime>
+#include "cameraanimationmath.h"
 
 
 LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
@@ -190,7 +191,12 @@ void LocationIndicatorManager::setLocation(const LocationData& data)
 
         if (m_state == State::FixedFollowing && m_overlay && headingChanged
             && m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
-            updateOverlayRotation();
+            // Start smoothed rotation: from currently-displayed angle (NOT m_rotation
+            // which is raw heading for Symbol Layer) to new heading target.
+            m_overlayRotStart = m_overlayCurrentAngle;  // E3: start from current displayed angle
+            m_overlayRotTarget = data.heading.value();
+            m_overlayRotStartTime = QDateTime::currentMSecsSinceEpoch();
+            // NOTE: NOT calling updateOverlayRotation — onAnimStep interpolates next frame
         }
     }
 
@@ -737,10 +743,31 @@ void LocationIndicatorManager::onAnimStep()
                 m_overlay->show();
                 m_overlay->raise();
                 repositionOverlay();
+                // E7 fix: resume-after-browse must not show stale rotation
+                const double snapAngle = m_currentLocation.heading.value_or(0.0);
+                m_overlayRotStart = m_overlayRotTarget = m_overlayCurrentAngle = snapAngle;
+                m_overlayRotStartTime = QDateTime::currentMSecsSinceEpoch();
+                updateOverlayRotation(snapAngle);
             }
             if (m_layerSetup && m_map) {
                 m_map->setLayoutProperty("location-indicator-layer",
                                           "visibility", "none");
+            }
+        }
+        // --- NorthUp overlay smoothed rotation interpolation (independent time variable, G5) ---
+        if (m_fixedHeadingMode == FixedHeadingMode::NorthUp && m_overlay
+            && m_overlayRotStart != m_overlayRotTarget) {
+            const qint64 rotElapsed = now - m_overlayRotStartTime;
+            const double rotProgress = qMin(1.0, static_cast<double>(rotElapsed)
+                                                / OVERLAY_ROTATION_DURATION);
+            const double rotEased = CameraMath::easeInOutQuad(rotProgress);
+            const double interpolated = CameraMath::interpolateAngle(
+                m_overlayRotStart, m_overlayRotTarget, rotEased);
+            m_overlayCurrentAngle = interpolated;
+            updateOverlayRotation(interpolated);
+            if (rotProgress >= 1.0) {
+                // Animation complete — lock start=target to stop ticking
+                m_overlayRotStart = m_overlayRotTarget;
             }
         }
     } else if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && m_layerSetup) {
