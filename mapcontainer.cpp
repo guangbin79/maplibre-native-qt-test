@@ -1087,3 +1087,9 @@ void MapContainer::applyLanguageLabels()
         }
     }
 }
+
+void MapContainer::onFollowBearingChanged(double bearing)
+{
+    m_lastBearing = bearing;
+    emit bearingChanged(bearing);
+}

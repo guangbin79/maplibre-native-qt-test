@@ -1107,6 +1107,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_mapContainer, &MapContainer::tiltChanged,
             m_controlPanel, &ControlPanelWidget::setTiltValue);
 
+    // 4. LocationIndicatorManager → MapContainer (跟随方位桥接)
+    connect(m_locationIndicatorManager, &LocationIndicatorManager::followBearingChanged,
+            m_mapContainer, &MapContainer::onFollowBearingChanged);
+
     // 3. Map → ScaleBar (比例尺更新)
     //    地图缩放或中心位置变化时，重新计算并更新比例尺显示
     connect(m_mapContainer, &MapContainer::zoomChanged,

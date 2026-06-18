@@ -302,9 +302,12 @@ void LocationIndicatorManager::setFixedHeadingMode(FixedHeadingMode mode)
     if (m_layerSetup && m_map) {
         if (m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
             if (m_map->bearing() != 0.0) {
-                const QSignalBlocker blocker(m_map);
-                m_map->setBearing(0.0);
+                {
+                    const QSignalBlocker blocker(m_map);
+                    m_map->setBearing(0.0);
+                }
             }
+            emit followBearingChanged(0.0);
         }
     }
 
@@ -723,9 +726,12 @@ void LocationIndicatorManager::onAnimStep()
             if (m_fixedHeadingMode == FixedHeadingMode::HeadingUp) {
                 double delta = bearingDelta(m_followStartBearing, m_targetBearing);
                 safeSetBearing(m_followStartBearing + delta * frame.progress);
+                emit followBearingChanged(m_map->bearing());
             } else {
-                if (qAbs(m_map->bearing()) > 0.01)
+                if (qAbs(m_map->bearing()) > 0.01) {
                     safeSetBearing(0.0);
+                    emit followBearingChanged(0.0);
+                }
             }
         }
 

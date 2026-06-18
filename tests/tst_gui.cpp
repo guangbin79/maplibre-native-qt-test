@@ -125,6 +125,8 @@ void GuiTest::initTestCase()
             m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
     connect(m_map, &MapContainer::userZoomDetected,
             m_locationIndicatorManager, &LocationIndicatorManager::pauseFollowing);
+    connect(m_locationIndicatorManager, &LocationIndicatorManager::followBearingChanged,
+            m_map, &MapContainer::onFollowBearingChanged);
 
     m_runner = m_window->findChild<TestRunner*>();
     QVERIFY(m_runner != nullptr);

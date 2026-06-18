@@ -810,6 +810,9 @@ public:
     bool isUserInteractionEnabled() const { return m_userInteractionEnabled; }
     bool isMapReady() const { return m_mapReady; }
 
+public slots:
+    void onFollowBearingChanged(double bearing);
+
 signals:
     /**
      * @brief 缩放级别变化信号
