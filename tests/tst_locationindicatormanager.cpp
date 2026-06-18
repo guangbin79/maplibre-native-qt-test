@@ -106,6 +106,7 @@ private slots:
     void testVisualLocationNegativeCoords();
     void testVisualLocationInterruption();
     void testVisualLocationStateIndependentEmit();
+    void testSetLocationRapidHeadingNoCrash();
 
 private:
     LocationIndicatorManager* mgr = nullptr;
@@ -732,6 +733,24 @@ void TestLocationIndicatorManager::testVisualLocationStateIndependentEmit()
     QCOMPARE(spy.count(), 2);
     mgr.maybeEmitVisualLocation(40.02, 116.52);
     QCOMPARE(spy.count(), 3);
+}
+
+// ===========================================================================
+// Group 7: Overlay rotation regression tests
+// ============================================================================
+
+void TestLocationIndicatorManager::testSetLocationRapidHeadingNoCrash()
+{
+    // Test that rapid setLocation calls with heading in NorthUp mode don't crash
+    // when m_overlay is nullptr (this is the unit test's null-map setup).
+    LocationIndicatorManager m(nullptr);
+    m.setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m.setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    const double headings[] = {0, 15, 30, 45, 60, 75, 90, 105, 120, 135};
+    for (double h : headings) {
+        m.setLocation({36.75, 3.05, h});
+    }
+    QCOMPARE(m.currentOverlayAngle(), 0.0);  // no overlay, no animation, stays default
 }
 
 QTEST_MAIN(TestLocationIndicatorManager)

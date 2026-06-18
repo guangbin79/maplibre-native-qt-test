@@ -165,6 +165,12 @@ public:
     bool isLocationVisible() const;
 
     /**
+     * @brief Returns the last interpolated overlay rotation angle (heading scale 0-360).
+     * @note For test verification; in non-animation states equals the last snap angle.
+     */
+    double currentOverlayAngle() const { return m_overlayCurrentAngle; }
+
+    /**
      * @brief 设置 Fixed 模式的中心偏移量
      *
      * 将地图可视中心从视口正中心向下偏移指定像素数。
@@ -300,6 +306,14 @@ protected:
     bool m_visible = false;
     QImage m_icon;
     double m_rotation = 0.0;  ///< 当前旋转角度（度）
+
+    // --- NorthUp overlay smoothed rotation animation state (time-deadline pattern) ---
+    double m_overlayRotStart = 0.0;        // Animation start angle (heading scale)
+    double m_overlayRotTarget = 0.0;       // Animation target angle
+    qint64 m_overlayRotStartTime = 0;      // Animation start timestamp (ms since epoch)
+    double m_overlayCurrentAngle = 0.0;    // Last interpolated angle (also test-hook return value)
+    static constexpr int OVERLAY_ROTATION_DURATION = 300;  // ms — independent of m_animDuration(1200ms)
+
     int m_centerOffset = 0;
     double m_targetZoom = -1.0;
     double m_targetPitch = -1.0;
