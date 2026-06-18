@@ -100,6 +100,13 @@ private slots:
     void testVisualLocationInterpolationMidpoint();
     void testVisualLocationNoEmitWhenComplete();
 
+    // Group 6 (continued): edge cases for visualLocationChanged
+    void testVisualLocationResumeAnimationEmits();
+    void testVisualLocationMidpointAccuracy();
+    void testVisualLocationNegativeCoords();
+    void testVisualLocationInterruption();
+    void testVisualLocationStateIndependentEmit();
+
 private:
     LocationIndicatorManager* mgr = nullptr;
 };
@@ -595,6 +602,136 @@ void TestLocationIndicatorManager::testVisualLocationNoEmitWhenComplete()
 
     // Real impl: first call emits, second is duplicate-suppressed
     QCOMPARE(spy.count(), 1);
+}
+
+// ===========================================================================
+// Group 6 (continued): edge cases for visualLocationChanged (5 tests)
+// ============================================================================
+
+void TestLocationIndicatorManager::testVisualLocationResumeAnimationEmits()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setResumeAnimating(true);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    const qint64 ticks[] = {100, 200, 300};
+    double prevLat = 39.9;
+    for (qint64 t : ticks) {
+        auto frame = mgr.computeFollowingFrame(t);
+        mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+        QVERIFY2(frame.lat >= prevLat - 1e-12, "latitude must not move backward");
+        QVERIFY2(frame.lat <= 40.0 + 1e-12, "latitude must not overshoot target");
+        prevLat = frame.lat;
+    }
+
+    QCOMPARE(spy.count(), 3);
+
+    auto finalFrame = mgr.computeFollowingFrame(300);
+    QCOMPARE(finalFrame.complete, true);
+    QVERIFY(qAbs(finalFrame.lat - 40.0) < 1e-9);
+    QVERIFY(qAbs(finalFrame.lon - 116.5) < 1e-9);
+}
+
+void TestLocationIndicatorManager::testVisualLocationMidpointAccuracy()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(0.0, 0.0, 0);
+    mgr.setFollowTarget(40.0, 100.0);
+    mgr.setAnimDuration(1200);
+
+    auto frame = mgr.computeFollowingFrame(600);
+
+    QVERIFY(qAbs(frame.lat - 20.0) < 1e-9);
+    QVERIFY(qAbs(frame.lon - 50.0) < 1e-9);
+    QVERIFY(qAbs(frame.progress - 0.5) < 1e-9);
+    QVERIFY(!frame.complete);
+
+    mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestLocationIndicatorManager::testVisualLocationNegativeCoords()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(-33.9, -70.6, 0);
+    mgr.setFollowTarget(-34.6, -58.4);
+    mgr.setAnimDuration(1200);
+
+    auto frame = mgr.computeFollowingFrame(600);
+
+    QVERIFY(qAbs(frame.lat - (-34.25)) < 1e-4);
+    QVERIFY(qAbs(frame.lon - (-64.5)) < 1e-4);
+    QVERIFY(qAbs(frame.progress - 0.5) < 1e-9);
+}
+
+void TestLocationIndicatorManager::testVisualLocationInterruption()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    auto frame1 = mgr.computeFollowingFrame(600);
+    QVERIFY(qAbs(frame1.lat - 39.95) < 1e-9);
+    QVERIFY(qAbs(frame1.lon - 116.45) < 1e-9);
+    mgr.maybeEmitVisualLocation(frame1.lat, frame1.lon);
+
+    mgr.setFollowStart(frame1.lat, frame1.lon, 600);
+    mgr.setFollowTarget(40.1, 116.6);
+
+    auto frame2 = mgr.computeFollowingFrame(900);
+    const double expectedLat = frame1.lat + (40.1 - frame1.lat) * 0.25;
+    const double expectedLon = frame1.lon + (116.6 - frame1.lon) * 0.25;
+    QVERIFY(qAbs(frame2.lat - expectedLat) < 1e-9);
+    QVERIFY(qAbs(frame2.lon - expectedLon) < 1e-9);
+    QVERIFY(qAbs(frame2.lat - 39.9875) < 1e-9);
+    QVERIFY(qAbs(frame2.lon - 116.4875) < 1e-9);
+
+    mgr.maybeEmitVisualLocation(frame2.lat, frame2.lon);
+    QCOMPARE(spy.count(), 2);
+}
+
+void TestLocationIndicatorManager::testVisualLocationStateIndependentEmit()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.maybeEmitVisualLocation(40.0, 116.5);
+    QCOMPARE(spy.count(), 1);
+
+    mgr.maybeEmitVisualLocation(40.0, 116.5);
+    mgr.maybeEmitVisualLocation(40.0, 116.5);
+    QCOMPARE(spy.count(), 1);
+
+    mgr.maybeEmitVisualLocation(40.01, 116.51);
+    QCOMPARE(spy.count(), 2);
+
+    mgr.setState(TestableLocationIndicatorManager::State::FreeVisible);
+    mgr.maybeEmitVisualLocation(40.01, 116.51);
+    QCOMPARE(spy.count(), 2);
+    mgr.maybeEmitVisualLocation(40.02, 116.52);
+    QCOMPARE(spy.count(), 3);
 }
 
 QTEST_MAIN(TestLocationIndicatorManager)
