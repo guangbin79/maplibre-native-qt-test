@@ -55,6 +55,7 @@ private slots:
     void testLayerZOrder();
     void testLocationHeadingUp();
     void testLocationNorthUp();
+    void testLocationNorthUpSmoothRotation();
     void testLocationSimulatedNavigation();
     void testTouchInfra();
     void testTouchPinchZoomRegression();
@@ -1113,6 +1114,62 @@ void GuiTest::testLocationNorthUp()
     m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
     m_locationIndicatorManager->hideLocation();
     QTest::qWait(500);
+}
+
+void GuiTest::testLocationNorthUpSmoothRotation()
+{
+    // Setup: create overlay (icon + showLocation), Fixed mode + NorthUp, settle at heading 90.
+    // Mirrors testLocationNorthUp setup — showLocation() is REQUIRED so m_overlay exists;
+    // otherwise the setLocation animation enqueue (guarded by m_overlay) never fires.
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(
+        LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(
+        LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QTest::qWait(500);  // wait for snap to settle at heading 90
+
+    // AC8: Verify animation is non-instantaneous (50ms should not complete 300ms animation)
+    // Re-establish FixedFollowing state: the NorthUp forced setBearing(0) during the
+    // settle can trip pan-detection (-> FixedBrowsing); showLocation() is the canonical
+    // API to (re-)enter following mode, which is the documented precondition for the
+    // overlay-rotation animation enqueue in setLocation().
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 180.0});  // 90 → 180
+    QTest::qWait(50);
+    const double angleMid = m_locationIndicatorManager->currentOverlayAngle();
+    QVERIFY2(qAbs(angleMid - 180.0) > 5.0,
+             "Animation should not complete within 50ms (300ms duration)");
+
+    // Wait for animation to complete
+    QTest::qWait(500);
+    const double angleAfter = m_locationIndicatorManager->currentOverlayAngle();
+    QVERIFY2(qAbs(angleAfter - 180.0) < 1.0,
+             "Animation should converge to target within 500ms");
+
+    // AC9: Anti-jitter — rapid small heading changes should produce smooth output
+    // Input stream: [170, 185, 175, 190, 180] — max input delta = |190-175| = 15
+    const double jitterAngles[] = {170.0, 185.0, 175.0, 190.0, 180.0};
+    QVector<double> observed;
+    observed.append(angleAfter);
+    for (double h : jitterAngles) {
+        m_locationIndicatorManager->setLocation({36.75, 3.05, h});
+        QTest::qWait(50);
+        observed.append(m_locationIndicatorManager->currentOverlayAngle());
+    }
+    double maxObservedDelta = 0.0;
+    for (int i = 1; i < observed.size(); ++i) {
+        maxObservedDelta = std::max(maxObservedDelta,
+                                     std::abs(observed[i] - observed[i-1]));
+    }
+    QVERIFY2(maxObservedDelta < 15.0,
+             "Animation should smooth jitter (low-pass filter)");
 }
 
 void GuiTest::testLocationSimulatedNavigation()
