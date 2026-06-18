@@ -251,6 +251,7 @@ signals:
      * state from connected slots.
      */
     void visualLocationChanged(double lat, double lon);
+    void followBearingChanged(double bearing);
 
 protected:
     /**

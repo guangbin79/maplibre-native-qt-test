@@ -72,6 +72,10 @@ private slots:
     void testResumeAfterBrowse();
     void testFollowAnimationStillWorks();
     void testSetZoomThenDrag();
+    void testFollowBearingChangedHeadingUp();
+    void testFollowBearingChangedNorthUpDrift();
+    void testFollowBearingChangedOnModeSwitch();
+    void testMapContainerBearingBridgedAndLastBearingSynced();
 
 private:
     MainWindow *m_window = nullptr;
@@ -1865,6 +1869,136 @@ void GuiTest::testSetZoomThenDrag()
     QVERIFY2(spy.count() >= 2, "Expected followingPausedChanged(false) after resume");
     bool resumed = !spy.at(spy.count() - 1).at(0).toBool();
     QVERIFY2(resumed, "Expected followingPausedChanged(false)");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testFollowBearingChangedHeadingUp()
+{
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followBearingChanged);
+    QVERIFY(spy.isValid());
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    m_locationIndicatorManager->setZoom(15.0);
+    m_locationIndicatorManager->setPitch(45.0);
+    QTest::qWait(2000);
+
+    QVERIFY2(spy.count() > 5, QStringLiteral("Expected multiple followBearingChanged emits during HeadingUp animation, got %1").arg(spy.count()).toUtf8());
+    if (spy.count() > 0) {
+        double lastBearing = spy.at(spy.count()-1).at(0).value<double>();
+        QVERIFY2(qAbs(lastBearing - 90.0) < 10.0, QStringLiteral("Last bearing should be ~90, got %1").arg(lastBearing).toUtf8());
+    }
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testFollowBearingChangedNorthUpDrift()
+{
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followBearingChanged);
+    QVERIFY(spy.isValid());
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+
+    double bearingBefore = m_map->map()->bearing();
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    m_locationIndicatorManager->setZoom(15.0);
+    m_locationIndicatorManager->setPitch(45.0);
+    QTest::qWait(2000);
+
+    QVERIFY2(spy.count() > 0, QStringLiteral("Expected followBearingChanged emit during NorthUp drift correction, got %1").arg(spy.count()).toUtf8());
+    if (spy.count() > 0) {
+        double lastBearing = spy.at(spy.count()-1).at(0).value<double>();
+        QVERIFY2(qAbs(lastBearing) < 5.0, QStringLiteral("Last bearing should be near 0, got %1").arg(lastBearing).toUtf8());
+    }
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testFollowBearingChangedOnModeSwitch()
+{
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    QTest::qWait(2000);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followBearingChanged);
+    QVERIFY(spy.isValid());
+
+    m_locationIndicatorManager->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::NorthUp);
+    QTest::qWait(500);
+
+    QVERIFY2(spy.count() >= 1, QStringLiteral("Expected followBearingChanged emit on mode switch to NorthUp, got %1").arg(spy.count()).toUtf8());
+    if (spy.count() > 0) {
+        double lastBearing = spy.at(spy.count()-1).at(0).value<double>();
+        QVERIFY2(qAbs(lastBearing) < 0.01, QStringLiteral("Bearing should be 0.0 after switching to NorthUp, got %1").arg(lastBearing).toUtf8());
+    }
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testMapContainerBearingBridgedAndLastBearingSynced()
+{
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    m_locationIndicatorManager->setFixedHeadingMode(LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    m_locationIndicatorManager->setLocation({36.75, 3.05, 90.0});
+    m_locationIndicatorManager->setZoom(15.0);
+    m_locationIndicatorManager->setPitch(45.0);
+    QTest::qWait(2000);
+
+    QSignalSpy spy(m_map, &MapContainer::bearingChanged);
+    QVERIFY(spy.isValid());
+    spy.clear();
+
+    double cur = m_map->map()->zoom();
+    m_map->map()->setZoom(cur + 0.5);
+    QTest::qWait(500);
+    m_map->map()->setZoom(cur);
+    QTest::qWait(500);
+
+    QVERIFY2(spy.count() == 0, QStringLiteral("AC10 FAIL: bearingChanged re-emitted after unrelated mapChanged (m_lastBearing not synced?). Got %1 emits").arg(spy.count()).toUtf8());
 
     m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
     m_locationIndicatorManager->hideLocation();
