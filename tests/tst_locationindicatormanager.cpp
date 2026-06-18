@@ -6,6 +6,40 @@ Q_DECLARE_METATYPE(LocationIndicatorManager::LocationData)
 Q_DECLARE_METATYPE(LocationIndicatorManager::LocationMode)
 Q_DECLARE_METATYPE(LocationIndicatorManager::FixedHeadingMode)
 
+// Test subclass that exposes protected members for White-box testing.
+class TestableLocationIndicatorManager : public LocationIndicatorManager {
+public:
+    using LocationIndicatorManager::LocationIndicatorManager;
+    using LocationIndicatorManager::computeFollowingFrame;
+    using LocationIndicatorManager::computeIconFrame;
+    using LocationIndicatorManager::maybeEmitVisualLocation;
+    using LocationIndicatorManager::State;
+
+    // Helper setters for protected animation state
+    void setState(State s) { m_state = s; }
+    void setLayerSetup(bool v) { m_layerSetup = v; }
+    void setFollowStart(double lat, double lon, qint64 startTime)
+    {
+        m_followStartLat = lat; m_followStartLon = lon; m_followStartTime = startTime;
+    }
+    void setFollowTarget(double lat, double lon)
+    {
+        m_followTargetLat = lat; m_followTargetLon = lon;
+    }
+    void setAnimDuration(int ms) { m_animDuration = ms; }
+    void setResumeAnimating(bool v) { m_resumeAnimating = v; }
+    void setIconStart(double lat, double lon, qint64 startTime)
+    {
+        m_iconStartLat = lat; m_iconStartLon = lon; m_iconStartTime = startTime;
+    }
+    void setCurrentLocation(double lat, double lon)
+    {
+        m_currentLocation.latitude = lat;
+        m_currentLocation.longitude = lon;
+    }
+    void setFollowingPaused(bool p) { m_followingPaused = p; }
+};
+
 class TestLocationIndicatorManager : public QObject {
     Q_OBJECT
 
@@ -55,6 +89,16 @@ private slots:
     void testSetLocationIconNoCrash();
     void testFollowingPausedChangedNotEmittedSpuriously();
     void testFollowingPausedChangedNotEmittedInFreeMode();
+
+    // Group 6: visualLocationChanged during animation
+    void testVisualLocationEmittedDuringFollowingAnimation();
+    void testVisualLocationFirstValueNearStart();
+    void testVisualLocationLastValueAtTarget();
+    void testVisualLocationMonotonicLat();
+    void testVisualLocationIconBranchEmits();
+    void testVisualLocationSpamSuppression();
+    void testVisualLocationInterpolationMidpoint();
+    void testVisualLocationNoEmitWhenComplete();
 
 private:
     LocationIndicatorManager* mgr = nullptr;
@@ -390,6 +434,166 @@ void TestLocationIndicatorManager::testFollowingPausedChangedNotEmittedInFreeMod
     mgr->setLocation({39.9, 116.4});
     mgr->setLocation({40.0, 116.5});
     mgr->hideLocation();
+    QCOMPARE(spy.count(), 0);
+}
+
+// ===========================================================================
+// Group 6: visualLocationChanged during animation (8 tests)
+// ===========================================================================
+
+void TestLocationIndicatorManager::testVisualLocationEmittedDuringFollowingAnimation()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    // Simulate 6 animation ticks
+    const qint64 ticks[] = {200, 400, 600, 800, 1000, 1200};
+    for (qint64 t : ticks) {
+        auto frame = mgr.computeFollowingFrame(t);
+        mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+    }
+
+    // Stub is no-op → count = 0, test FAILS (RED)
+    QCOMPARE(spy.count(), 6);
+}
+
+void TestLocationIndicatorManager::testVisualLocationFirstValueNearStart()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    auto frame = mgr.computeFollowingFrame(33);
+    mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+
+    // Stub is no-op → count = 0, test FAILS (RED)
+    QVERIFY(spy.count() == 1);
+}
+
+void TestLocationIndicatorManager::testVisualLocationLastValueAtTarget()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    auto frame = mgr.computeFollowingFrame(1200);
+    mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+
+    // Stub is no-op → count = 0, test FAILS (RED)
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestLocationIndicatorManager::testVisualLocationMonotonicLat()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    for (qint64 t = 0; t <= 1200; t += 100) {
+        auto frame = mgr.computeFollowingFrame(t);
+        mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+    }
+
+    // Stub is no-op → count = 0, test FAILS (RED)
+    QCOMPARE(spy.count(), 13);
+}
+
+void TestLocationIndicatorManager::testVisualLocationIconBranchEmits()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedBrowsing);
+    mgr.setLayerSetup(true);
+    mgr.setIconStart(39.9, 116.4, 0);
+    mgr.setCurrentLocation(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    {
+        auto frame = mgr.computeIconFrame(600);
+        mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+    }
+    {
+        auto frame = mgr.computeIconFrame(1200);
+        mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+    }
+
+    // Stub is no-op → count = 0, test FAILS (RED)
+    QCOMPARE(spy.count(), 2);
+}
+
+void TestLocationIndicatorManager::testVisualLocationSpamSuppression()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    // Call twice with the same coordinates → stub emits neither
+    mgr.maybeEmitVisualLocation(39.9, 116.4);
+    mgr.maybeEmitVisualLocation(39.9, 116.4);
+
+    // Stub is no-op → count stays 0 → this test may PASS (RED vulnerability)
+    QCOMPARE(spy.count(), 0);
+}
+
+void TestLocationIndicatorManager::testVisualLocationInterpolationMidpoint()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.setState(TestableLocationIndicatorManager::State::FixedFollowing);
+    mgr.setFollowingPaused(false);
+    mgr.setFollowStart(39.9, 116.4, 0);
+    mgr.setFollowTarget(40.0, 116.5);
+    mgr.setAnimDuration(1200);
+
+    auto frame = mgr.computeFollowingFrame(600);  // progress = 0.5
+    QVERIFY(qAbs(frame.lat - 39.95) < 1e-9);
+    QVERIFY(qAbs(frame.lon - 116.45) < 1e-9);
+
+    mgr.maybeEmitVisualLocation(frame.lat, frame.lon);
+
+    // Stub is no-op → count = 0, test FAILS (RED)
+    QCOMPARE(spy.count(), 1);
+}
+
+void TestLocationIndicatorManager::testVisualLocationNoEmitWhenComplete()
+{
+    TestableLocationIndicatorManager mgr(nullptr);
+    QSignalSpy spy(&mgr, &LocationIndicatorManager::visualLocationChanged);
+    QVERIFY(spy.isValid());
+
+    mgr.maybeEmitVisualLocation(40.0, 116.5);
+    mgr.maybeEmitVisualLocation(40.0, 116.5);
+
+    // Stub is no-op → no emit, test may PASS (RED vulnerability — real impl should suppress)
     QCOMPARE(spy.count(), 0);
 }
 

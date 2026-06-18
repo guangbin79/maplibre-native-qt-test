@@ -229,10 +229,28 @@ signals:
     void locationChanged(const LocationData& data);
     void followingPausedChanged(bool paused);
 
+    /**
+     * @brief Icon's current visual GPS coordinate (interpolated during animation).
+     *
+     * Emitted every frame during animation in Fixed mode. Carries the interpolated
+     * lat/lon — NOT raw GPS data. See `locationChanged` for raw GPS arrival.
+     *
+     * - FixedFollowing: emits interpolated map center (= GPS coordinate)
+     * - FixedBrowsing/FreeVisible: emits interpolated symbol-layer icon position
+     *
+     * Note: payload is lat/lon only (no heading/speed — interpolated frames have
+     * no real heading). Known limitation: linear interpolation does not handle
+     * anti-meridian (±180°) crossings. Reentrancy: do not modify this manager's
+     * state from connected slots.
+     */
+    void visualLocationChanged(double lat, double lon);
 
-private:
+protected:
     /**
      * @brief 位置指示器内部状态
+     *
+     * Made protected (not private) so that TestableLocationIndicatorManager
+     * can access the enumerators in unit tests.
      */
     enum class State {
         Hidden,         ///< 位置指示器隐藏
@@ -241,6 +259,7 @@ private:
         FixedBrowsing   ///< Fixed 模式 — 用户正在拖拽地图
     };
 
+private:
     /**
      * @brief 获取当前内部状态
      * @return 当前 State
@@ -268,6 +287,9 @@ protected:
     struct IconFrame { double lat; double lon; double progress; bool complete; };
     FollowingFrame computeFollowingFrame(qint64 now) const;
     IconFrame computeIconFrame(qint64 now) const;
+
+    // Stub — Task 3 replaces with real implementation (spam suppression + emit)
+    void maybeEmitVisualLocation(double lat, double lon) { (void)lat; (void)lon; }
 
     bool eventFilter(QObject* watched, QEvent* event) override;
 
