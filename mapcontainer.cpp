@@ -164,6 +164,7 @@ bool MapContainer::eventFilter(QObject *obj, QEvent *event) {
                 auto *mouseEvent = static_cast<QMouseEvent *>(event);
                 if (mouseEvent->button() == Qt::RightButton) {
                     m_rightDragActive = true;
+                    emit userPanDetected();
                     m_lastRightDragPos = mouseEvent->position();
                     stopCameraAnimation();
                     map()->setGestureInProgress(true);

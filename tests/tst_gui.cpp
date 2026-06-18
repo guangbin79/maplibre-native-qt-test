@@ -62,6 +62,16 @@ private slots:
     void testTouchTwoFingerTapZoomOutTriggers();
     void testTouchDoubleTapDoesNotRecenter();
 
+    // Regression tests: setZoom/setPitch in FixedFollowing browse-mode bug
+    void testSetZoomDoesNotTriggerBrowse();
+    void testSetPitchDoesNotTriggerBrowse();
+    void testUserPanDetectedTriggersBrowse();
+    void testUserZoomDetectedTriggersBrowse();
+    void testExternalMapChangeTriggersBrowse();
+    void testResumeAfterBrowse();
+    void testFollowAnimationStillWorks();
+    void testSetZoomThenDrag();
+
 private:
     MainWindow *m_window = nullptr;
     MapContainer *m_map = nullptr;
@@ -1490,6 +1500,318 @@ void GuiTest::testTouchDoubleTapDoesNotRecenter()
                         .arg(centerDrift, 0, 'f', 6)));
 
     log("testTouchDoubleTapDoesNotRecenter: PASSED — zoom-to-cursor preserves map center");
+}
+
+// ===========================================================================
+// Regression tests: setZoom/setPitch in FixedFollowing browse-mode bug
+// These are RED-phase tests for the three-layer trigger refactoring.
+// Tests 1-2 MUST FAIL initially — proving the bug that setZoom/setPitch
+// incorrectly trigger FixedBrowsing due to missing m_selfAnimating=true.
+// Tests 3-8 define expected behavior after the refactoring.
+// ===========================================================================
+
+void GuiTest::testSetZoomDoesNotTriggerBrowse()
+{
+    log("testSetZoomDoesNotTriggerBrowse: setZoom must NOT trigger FixedBrowsing");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    // Spy on followingPausedChanged BEFORE calling setZoom so we capture
+    // any synchronous or asynchronous signal emission
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    double zoomBefore = m_map->map()->zoom();
+    log(QStringLiteral("Zoom before setZoom: %1").arg(zoomBefore));
+
+    // Call setZoom synchronously after setup. The follow animation timer
+    // may or may not have set m_selfAnimating=true yet. We wait long enough
+    // for the render to process any pending region changes.
+    m_locationIndicatorManager->setZoom(15.0);
+
+    // Wait for map rendering to process the zoom change and emit signals
+    QTest::qWait(2000);
+
+    double zoomAfter = m_map->map()->zoom();
+    log(QStringLiteral("Zoom after setZoom: %1, spy count: %2").arg(zoomAfter).arg(spy.count()));
+
+    // RED PHASE: This should fail — setZoom triggers spurious FixedBrowsing.
+    // If the test passes, the bug may be masked by the animation timer
+    // (which constantly sets m_selfAnimating=true at 30fps).
+    QCOMPARE(spy.count(), 0);
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testSetPitchDoesNotTriggerBrowse()
+{
+    log("testSetPitchDoesNotTriggerBrowse: setPitch must NOT trigger FixedBrowsing");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    QTest::qWait(1500);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    m_locationIndicatorManager->setPitch(45.0);
+    QTest::qWait(1000);
+
+    // RED PHASE: Same bug as setZoom — missing m_selfAnimating causes spurious browse.
+    QCOMPARE(spy.count(), 0);
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testUserPanDetectedTriggersBrowse()
+{
+    log("testUserPanDetectedTriggersBrowse: user pan signal must trigger FixedBrowsing");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    QTest::qWait(1500);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    // After refactoring: userPanDetected → pauseFollowing → transitionToBrowsing
+    // → followingPausedChanged(true). Currently pauseFollowing is a no-op in FixedFollowing.
+    emit m_map->userPanDetected();
+    QTest::qWait(500);
+
+    QVERIFY2(spy.count() >= 1, "Expected followingPausedChanged(true) after userPanDetected");
+    bool paused = spy.at(0).at(0).toBool();
+    QVERIFY2(paused, "Expected followingPausedChanged(true)");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testUserZoomDetectedTriggersBrowse()
+{
+    log("testUserZoomDetectedTriggersBrowse: user zoom signal must trigger FixedBrowsing");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    QTest::qWait(1500);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    // After refactoring: userZoomDetected → pauseFollowing → transitionToBrowsing
+    emit m_map->userZoomDetected();
+    QTest::qWait(500);
+
+    QVERIFY2(spy.count() >= 1, "Expected followingPausedChanged(true) after userZoomDetected");
+    bool paused = spy.at(0).at(0).toBool();
+    QVERIFY2(paused, "Expected followingPausedChanged(true)");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testExternalMapChangeTriggersBrowse()
+{
+    log("testExternalMapChangeTriggersBrowse: external programmatic change triggers browse");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    QTest::qWait(1500);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    // Simulate MapContainer calling setZoom directly on the underlying map.
+    // This is an external programmatic change — RegionWillChange fires,
+    // LIM detects !m_selfAnimating, transitions to FixedBrowsing.
+    m_map->map()->setZoom(10.0);
+    QTest::qWait(1000);
+
+    QVERIFY2(spy.count() >= 1, "Expected followingPausedChanged(true) after external map change");
+    bool paused = spy.at(0).at(0).toBool();
+    QVERIFY2(paused, "Expected followingPausedChanged(true)");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testResumeAfterBrowse()
+{
+    log("testResumeAfterBrowse: browse mode auto-resumes after timeout");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(400);
+    m_map->setUserInteractionEnabled(false);
+    QTest::qWait(2000);
+
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    QTest::qWait(1000);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    m_locationIndicatorManager->setLocation({36.76, 3.06});
+    QTest::qWait(500);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    QTest::qWait(500);
+
+    QWidget *mapWidget = m_map->findChild<QWidget*>();
+    QVERIFY(mapWidget != nullptr);
+    QPoint center = mapWidget->rect().center();
+
+    QTest::mousePress(mapWidget, Qt::LeftButton, {}, center);
+    QTest::mouseMove(mapWidget, center + QPoint(200, 0));
+    QTest::mouseRelease(mapWidget, Qt::LeftButton, {}, center + QPoint(200, 0));
+    QTest::qWait(1000);
+
+    QVERIFY2(spy.count() >= 1,
+             QStringLiteral("Expected followingPausedChanged(true), got %1").arg(spy.count()).toUtf8());
+    QVERIFY2(spy.at(0).at(0).toBool(), "Expected followingPausedChanged(true)");
+
+    log("Waiting for auto-resume timeout...");
+    QTest::qWait(4500);
+
+    QVERIFY2(spy.count() >= 2,
+             QStringLiteral("Expected followingPausedChanged(false), got %1").arg(spy.count()).toUtf8());
+    QVERIFY2(!spy.at(spy.count() - 1).at(0).toBool(), "Expected followingPausedChanged(false)");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testFollowAnimationStillWorks()
+{
+    log("testFollowAnimationStillWorks: follow animation updates map center");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_locationIndicatorManager->setFixedHeadingMode(
+        LocationIndicatorManager::FixedHeadingMode::HeadingUp);
+    QTest::qWait(2000);
+
+    // Record initial center
+    QMapLibre::Coordinate before = getMapCenter();
+    log(QStringLiteral("Before follow: lat=%1 lon=%2").arg(before.first).arg(before.second));
+
+    // Send multiple GPS updates moving northeast
+    double lat = 36.76;
+    double lon = 3.06;
+    for (int i = 0; i < 3; ++i) {
+        m_locationIndicatorManager->setLocation({lat, lon});
+        lat += 0.001;
+        lon += 0.001;
+        QTest::qWait(1500);
+    }
+
+    QMapLibre::Coordinate after = getMapCenter();
+    log(QStringLiteral("After follow: lat=%1 lon=%2").arg(after.first).arg(after.second));
+
+    double latDiff = qAbs(after.first - before.first);
+    double lonDiff = qAbs(after.second - before.second);
+    QVERIFY2(latDiff > 0.001 || lonDiff > 0.001,
+             "Map center should have moved during follow animation");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
+}
+
+void GuiTest::testSetZoomThenDrag()
+{
+    log("testSetZoomThenDrag: setZoom in FixedFollowing + drag must enter FixedBrowsing");
+
+    QImage icon(32, 32, QImage::Format_ARGB32);
+    icon.fill(Qt::blue);
+    m_locationIndicatorManager->setLocationIcon(icon);
+    m_locationIndicatorManager->setLocation({36.75, 3.05});
+    m_locationIndicatorManager->showLocation();
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Fixed);
+    m_locationIndicatorManager->setCenterOffset(200);
+    m_map->setUserInteractionEnabled(true);
+    m_locationIndicatorManager->setFixedTouchResumeTimeout(3000);
+    QTest::qWait(1500);
+
+    QSignalSpy spy(m_locationIndicatorManager, &LocationIndicatorManager::followingPausedChanged);
+    QVERIFY(spy.isValid());
+
+    // Step 1: Call setZoom (currently buggy — triggers browse)
+    m_locationIndicatorManager->setZoom(15.0);
+    QTest::qWait(1000);
+
+    // Step 2: Simulate mouse drag — must enter FixedBrowsing
+    // (After the fix, setZoom won't trigger browse; drag will)
+    QWidget *mapWidget = m_map->findChild<QWidget*>();
+    QVERIFY(mapWidget != nullptr);
+    QPoint center = mapWidget->rect().center();
+
+    QTest::mousePress(mapWidget, Qt::LeftButton, {}, center);
+    QTest::mouseMove(mapWidget, center + QPoint(200, 0));
+    QTest::mouseRelease(mapWidget, Qt::LeftButton, {}, center + QPoint(200, 0));
+    QTest::qWait(1000);
+
+    // At least one followingPausedChanged(true) should have been emitted
+    // (from setZoom in current buggy code, or from drag after the fix)
+    QVERIFY2(spy.count() >= 1, "Expected followingPausedChanged(true) after setZoom+drag");
+
+    // Verify the last signal was followingPausedChanged(true)
+    bool lastPaused = spy.at(spy.count() - 1).at(0).toBool();
+    QVERIFY2(lastPaused, "Expected followingPausedChanged(true) — browsing active after drag");
+
+    // Wait for resume
+    log("Waiting for auto-resume...");
+    QTest::qWait(4500);
+
+    QVERIFY2(spy.count() >= 2, "Expected followingPausedChanged(false) after resume");
+    bool resumed = !spy.at(spy.count() - 1).at(0).toBool();
+    QVERIFY2(resumed, "Expected followingPausedChanged(false)");
+
+    m_locationIndicatorManager->setMode(LocationIndicatorManager::LocationMode::Free);
+    m_locationIndicatorManager->hideLocation();
+    QTest::qWait(500);
 }
 
 QTEST_MAIN(GuiTest)
