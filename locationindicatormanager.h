@@ -264,6 +264,11 @@ private:
 
 
 protected:
+    struct FollowingFrame { double lat; double lon; double progress; bool complete; };
+    struct IconFrame { double lat; double lon; double progress; bool complete; };
+    FollowingFrame computeFollowingFrame(qint64 now) const;
+    IconFrame computeIconFrame(qint64 now) const;
+
     bool eventFilter(QObject* watched, QEvent* event) override;
 
     QMapLibre::Map* m_map;

@@ -652,25 +652,46 @@ static double bearingDelta(double from, double to) {
     return delta;
 }
 
+LocationIndicatorManager::FollowingFrame LocationIndicatorManager::computeFollowingFrame(qint64 now) const
+{
+    qint64 elapsed = now - m_followStartTime;
+    int duration = m_resumeAnimating ? RESUME_ANIM_DURATION : m_animDuration;
+    double progress = qMin(1.0, static_cast<double>(elapsed) / duration);
+    double eased = progress;
+
+    double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
+    double lon = m_followStartLon + (m_followTargetLon - m_followStartLon) * eased;
+
+    return {lat, lon, progress, progress >= 1.0};
+}
+
+LocationIndicatorManager::IconFrame LocationIndicatorManager::computeIconFrame(qint64 now) const
+{
+    qint64 elapsed = now - m_iconStartTime;
+    double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
+    double eased = progress;
+
+    double lat = m_iconStartLat + (m_currentLocation.latitude - m_iconStartLat) * eased;
+    double lon = m_iconStartLon + (m_currentLocation.longitude - m_iconStartLon) * eased;
+
+    return {lat, lon, progress, progress >= 1.0};
+}
+
 void LocationIndicatorManager::onAnimStep()
 {
     if (!m_map)
         return;
 
-    if (m_state == State::FixedFollowing && !m_followingPaused) {
-        qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_followStartTime;
-        int duration = m_resumeAnimating ? RESUME_ANIM_DURATION : m_animDuration;
-        double progress = qMin(1.0, static_cast<double>(elapsed) / duration);
-        double eased = progress;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
 
-        double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
-        double lon = m_followStartLon + (m_followTargetLon - m_followStartLon) * eased;
-        safeSetCoordinate(lat, lon);
+    if (m_state == State::FixedFollowing && !m_followingPaused) {
+        auto frame = computeFollowingFrame(now);
+        safeSetCoordinate(frame.lat, frame.lon);
 
         if (m_targetBearing >= 0) {
             if (m_fixedHeadingMode == FixedHeadingMode::HeadingUp) {
                 double delta = bearingDelta(m_followStartBearing, m_targetBearing);
-                safeSetBearing(m_followStartBearing + delta * eased);
+                safeSetBearing(m_followStartBearing + delta * frame.progress);
             } else {
                 if (qAbs(m_map->bearing()) > 0.01)
                     safeSetBearing(0.0);
@@ -678,7 +699,7 @@ void LocationIndicatorManager::onAnimStep()
         }
 
         // Resume animation complete — switch from Symbol Layer to overlay
-        if (m_resumeAnimating && progress >= 1.0) {
+        if (m_resumeAnimating && frame.complete) {
             // Reset animation start to current GPS position for seamless
             // handoff to normal following (prevents progress jump from
             // 300/300=1.0 back to 300/1200=0.25)
@@ -698,12 +719,9 @@ void LocationIndicatorManager::onAnimStep()
             }
         }
     } else if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && m_layerSetup) {
-        qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_iconStartTime;
-        double progress = qMin(1.0, static_cast<double>(elapsed) / m_animDuration);
-        double eased = progress;
-
-        m_displayLat = m_iconStartLat + (m_currentLocation.latitude - m_iconStartLat) * eased;
-        m_displayLon = m_iconStartLon + (m_currentLocation.longitude - m_iconStartLon) * eased;
+        auto frame = computeIconFrame(now);
+        m_displayLat = frame.lat;
+        m_displayLon = frame.lon;
         updateSourceToCoordinate(m_displayLat, m_displayLon);
     }
 }
