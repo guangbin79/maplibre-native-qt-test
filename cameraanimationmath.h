@@ -29,6 +29,10 @@ inline double lerp(double a, double b, double t) {
     return a + (b - a) * t;
 }
 
+inline double interpolateAngle(double from, double to, double t) {
+    return std::fmod(from + bearingDelta(from, to) * t + 360.0, 360.0);
+}
+
 } // namespace CameraMath
 
 #endif // CAMERAANIMATIONMATH_H
