@@ -304,6 +304,12 @@ void LocationIndicatorManager::setFixedHeadingMode(FixedHeadingMode mode)
 
     if (m_overlay && m_visible && m_mode == LocationMode::Fixed && m_state == State::FixedFollowing) {
         updateOverlayRotation();
+        // Cancel any in-flight animation + sync state to snap angle (G3, E3)
+        const double snapAngle = (m_fixedHeadingMode == FixedHeadingMode::NorthUp
+                                  && m_currentLocation.heading.has_value())
+                                 ? m_currentLocation.heading.value() : 0.0;
+        m_overlayRotStart = m_overlayRotTarget = m_overlayCurrentAngle = snapAngle;
+        m_overlayRotStartTime = QDateTime::currentMSecsSinceEpoch();
     }
 }
 
@@ -341,6 +347,12 @@ void LocationIndicatorManager::showLocation()
 
         if (m_overlay) {
             updateOverlayRotation();
+            // Cancel any in-flight animation + sync state to snap angle (G3, E3)
+            const double snapAngle = (m_fixedHeadingMode == FixedHeadingMode::NorthUp
+                                      && m_currentLocation.heading.has_value())
+                                     ? m_currentLocation.heading.value() : 0.0;
+            m_overlayRotStart = m_overlayRotTarget = m_overlayCurrentAngle = snapAngle;
+            m_overlayRotStartTime = QDateTime::currentMSecsSinceEpoch();
             m_overlay->show();
             m_overlay->raise();
         }
@@ -748,7 +760,7 @@ bool LocationIndicatorManager::eventFilter(QObject* watched, QEvent* event)
     return QObject::eventFilter(watched, event);
 }
 
-void LocationIndicatorManager::updateOverlayRotation()
+void LocationIndicatorManager::updateOverlayRotation(double angle)
 {
     if (!m_overlay || m_icon.isNull())
         return;
@@ -777,7 +789,10 @@ void LocationIndicatorManager::updateOverlayRotation()
         // Rotate around center of canvas
         QTransform transform;
         transform.translate(diag / 2.0, diag / 2.0);
-        transform.rotate(m_currentLocation.heading.value());
+        const double angleToUse = std::isnan(angle)
+            ? m_currentLocation.heading.value_or(0.0)
+            : angle;
+        transform.rotate(angleToUse);
         transform.translate(-diag / 2.0, -diag / 2.0);
 
         QPixmap rotated = QPixmap::fromImage(canvas).transformed(transform, Qt::SmoothTransformation);

@@ -26,6 +26,7 @@
 #include <QLabel>
 #include <QPixmap>
 #include <QTimer>
+#include <limits>
 #include <optional>
 
 namespace QMapLibre { class Map; }
@@ -278,7 +279,7 @@ private:
     QByteArray buildGeoJson() const;
     void applyFixedMode();
     void applyFreeMode();
-    void updateOverlayRotation();
+    void updateOverlayRotation(double angle = std::numeric_limits<double>::quiet_NaN());
     void updateIconAlignment();
     void repositionOverlay();
     void onAnimStep();
