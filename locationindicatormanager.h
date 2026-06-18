@@ -246,6 +246,7 @@ private:
      * @return 当前 State
      */
     State state() const;
+    void transitionToBrowsing();
 
     void ensureLayerSetup();
     void rebuildSource();
@@ -278,7 +279,6 @@ protected:
     double m_targetPitch = -1.0;
     State m_state = State::Hidden;
     FixedHeadingMode m_fixedHeadingMode = FixedHeadingMode::HeadingUp;
-    bool m_selfAnimating = false; ///< 区分自己触发的 map 变化 vs 用户拖拽
 
     // Unified animation timer (~30fps)
     QTimer* m_animTimer = nullptr;

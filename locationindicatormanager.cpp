@@ -45,6 +45,7 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
         // Symbol Layer stays visible during animation (icon pinned at GPS coordinate).
         // Overlay shown only AFTER animation completes (in onAnimStep).
         m_state = State::FixedFollowing;
+        emit followingPausedChanged(false);
         m_resumeAnimating = true;
 
         // Pin Symbol Layer to exact GPS position
@@ -53,17 +54,17 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
         updateSourceToCoordinate(m_displayLat, m_displayLon);
 
         // Restore Fixed mode margins
-        m_selfAnimating = true;
-        m_map->setMargins(QMargins(0, effectiveCenterOffset(), 0, 0));
+        {
+            const QSignalBlocker blocker(m_map);
+            m_map->setMargins(QMargins(0, effectiveCenterOffset(), 0, 0));
 
-        // Restore zoom/pitch
-        if (m_targetZoom >= 0) {
-            m_selfAnimating = true;
-            m_map->setZoom(m_targetZoom);
-        }
-        if (m_targetPitch >= 0) {
-            m_selfAnimating = true;
-            m_map->setPitch(m_targetPitch);
+            // Restore zoom/pitch
+            if (m_targetZoom >= 0) {
+                m_map->setZoom(m_targetZoom);
+            }
+            if (m_targetPitch >= 0) {
+                m_map->setPitch(m_targetPitch);
+            }
         }
 
         // Record animation start = current map center (drag position)
@@ -131,41 +132,10 @@ void LocationIndicatorManager::initMap(QMapLibre::Map* map)
                             rebuildSource();
                         }
                     } else if (change == QMapLibre::Map::MapChangeRegionWillChange) {
-                        if (m_state == State::FixedFollowing && !m_selfAnimating) {
-                            m_state = State::FixedBrowsing;
-
-                            m_followingPaused = true;
-                            if (m_animTimer)
-                                m_animTimer->stop();
-                            if (m_resumeTimer) {
-                                m_resumeTimer->setInterval(m_fixedTouchResumeTimeout);
-                                m_resumeTimer->start();
-                            }
-
-                            if (m_overlay)
-                                m_overlay->hide();
-
-                            if (m_layerSetup && m_map) {
-                                m_displayLat = m_currentLocation.latitude;
-                                m_displayLon = m_currentLocation.longitude;
-                                updateSourceToCoordinate(m_displayLat, m_displayLon);
-                                m_map->setLayoutProperty("location-indicator-layer",
-                                                           "visibility", "visible");
-                            }
-                        }
+                        transitionToBrowsing();
                     } else if (change == QMapLibre::Map::MapChangeRegionDidChange
                                || change == QMapLibre::Map::MapChangeRegionDidChangeAnimated) {
-                        // Defer reset to next event loop iteration — allows multiple
-                        // consecutive self-initiated map operations (setMargins, jumpTo,
-                        // setZoom, setPitch in applyFixedMode) to all be protected.
-                        // If reset synchronously, the 2nd/3rd/4th operation would be
-                        // mistaken for a user drag, hiding the overlay.
-                        QMetaObject::invokeMethod(this, [this]() {
-                            m_selfAnimating = false;
-                        }, Qt::QueuedConnection);
-                        // FixedBrowsing 状态下，任何地图变化都重启 resume timer
-                        // 覆盖旋转/俯视等不触发 pauseFollowing 的手势
-                        if (m_state == State::FixedBrowsing && !m_selfAnimating && m_resumeTimer)
+                        if (m_state == State::FixedBrowsing && m_resumeTimer)
                             m_resumeTimer->start();
                     }
                 });
@@ -326,7 +296,7 @@ void LocationIndicatorManager::setFixedHeadingMode(FixedHeadingMode mode)
     if (m_layerSetup && m_map) {
         if (m_fixedHeadingMode == FixedHeadingMode::NorthUp) {
             if (m_map->bearing() != 0.0) {
-                m_selfAnimating = true;
+                const QSignalBlocker blocker(m_map);
                 m_map->setBearing(0.0);
             }
         }
@@ -414,7 +384,7 @@ void LocationIndicatorManager::setCenterOffset(int bottomPixels)
 {
     m_centerOffset = bottomPixels;
     if (m_mode == LocationMode::Fixed && m_map) {
-        m_selfAnimating = true;
+        const QSignalBlocker blocker(m_map);
         m_map->setMargins(QMargins(0, m_centerOffset, 0, 0));
     }
 }
@@ -435,6 +405,7 @@ void LocationIndicatorManager::setZoom(double zoom)
 {
     m_targetZoom = zoom;
     if (m_state == State::FixedFollowing && m_map) {
+        const QSignalBlocker blocker(m_map);
         m_map->setZoom(zoom);
     }
 }
@@ -443,6 +414,7 @@ void LocationIndicatorManager::setPitch(double pitch)
 {
     m_targetPitch = pitch;
     if (m_state == State::FixedFollowing && m_map) {
+        const QSignalBlocker blocker(m_map);
         m_map->setPitch(pitch);
     }
 }
@@ -469,24 +441,34 @@ int LocationIndicatorManager::fixedTouchResumeTimeout() const
 
 void LocationIndicatorManager::pauseFollowing()
 {
-    // Don't stop m_animTimer — it's needed for icon animation in FixedBrowsing state.
-    // The state machine handles everything:
-    // - FixedFollowing + m_followingPaused=true → onAnimStep skips map following
-    // - FixedBrowsing → onAnimStep runs icon animation
-    // Stopping the timer here would freeze the icon during drag, because
-    // pauseFollowing() is called on every MouseMove event.
-
-    // Restart resume timer on every user interaction (called on every MouseMove).
-    // This keeps the timeout alive as long as the user is actively dragging.
-    // The timer only fires after the user stops dragging for m_fixedTouchResumeTimeout ms.
-    if (m_resumeTimer && m_state == State::FixedBrowsing) {
+    transitionToBrowsing();
+    if (m_state == State::FixedBrowsing && m_resumeTimer)
         m_resumeTimer->start();
-    }
 }
 
 LocationIndicatorManager::State LocationIndicatorManager::state() const
 {
     return m_state;
+}
+
+void LocationIndicatorManager::transitionToBrowsing()
+{
+    if (m_state != State::FixedFollowing) return;
+    m_state = State::FixedBrowsing;
+    m_followingPaused = true;
+    if (m_animTimer) m_animTimer->stop();
+    if (m_resumeTimer) {
+        m_resumeTimer->setInterval(m_fixedTouchResumeTimeout);
+        m_resumeTimer->start();
+    }
+    if (m_overlay) m_overlay->hide();
+    if (m_layerSetup && m_map) {
+        m_displayLat = m_currentLocation.latitude;
+        m_displayLon = m_currentLocation.longitude;
+        updateSourceToCoordinate(m_displayLat, m_displayLon);
+        m_map->setLayoutProperty("location-indicator-layer", "visibility", "visible");
+    }
+    emit followingPausedChanged(true);
 }
 
 void LocationIndicatorManager::ensureLayerSetup()
@@ -587,9 +569,6 @@ void LocationIndicatorManager::applyFixedMode()
     if (!m_map)
         return;
 
-    m_selfAnimating = true;
-    m_map->setMargins(QMargins(0, effectiveCenterOffset(), 0, 0));
-
     if (m_state == State::FixedFollowing) {
         ensureLayerSetup();
         if (m_layerSetup) {
@@ -598,30 +577,32 @@ void LocationIndicatorManager::applyFixedMode()
                                      "visibility", "none");
         }
 
-        m_selfAnimating = true;
-        QMapLibre::CameraOptions options;
-        options.center = QVariant::fromValue(
-            QMapLibre::Coordinate(m_currentLocation.latitude,
-                                  m_currentLocation.longitude));
-        m_map->jumpTo(options);
+        {
+            const QSignalBlocker blocker(m_map);
+            m_map->setMargins(QMargins(0, effectiveCenterOffset(), 0, 0));
+
+            QMapLibre::CameraOptions options;
+            options.center = QVariant::fromValue(
+                QMapLibre::Coordinate(m_currentLocation.latitude,
+                                      m_currentLocation.longitude));
+            m_map->jumpTo(options);
+
+            if (m_targetZoom >= 0) {
+                m_map->setZoom(m_targetZoom);
+            } else {
+                m_targetZoom = m_map->zoom();
+            }
+            if (m_targetPitch >= 0) {
+                m_map->setPitch(m_targetPitch);
+            } else {
+                m_targetPitch = m_map->pitch();
+            }
+        }
 
         m_followStartLat = m_currentLocation.latitude;
         m_followStartLon = m_currentLocation.longitude;
         m_followStartBearing = m_map->bearing();
         m_followStartTime = QDateTime::currentMSecsSinceEpoch();
-
-        if (m_targetZoom >= 0) {
-            m_selfAnimating = true;
-            m_map->setZoom(m_targetZoom);
-        } else {
-            m_targetZoom = m_map->zoom();
-        }
-        if (m_targetPitch >= 0) {
-            m_selfAnimating = true;
-            m_map->setPitch(m_targetPitch);
-        } else {
-            m_targetPitch = m_map->pitch();
-        }
 
         if (m_overlay) {
             repositionOverlay();
@@ -654,13 +635,13 @@ void LocationIndicatorManager::applyFreeMode()
 
 void LocationIndicatorManager::safeSetCoordinate(double lat, double lon)
 {
-    m_selfAnimating = true;
+    const QSignalBlocker blocker(m_map);
     m_map->setCoordinate(QMapLibre::Coordinate(lat, lon));
 }
 
 void LocationIndicatorManager::safeSetBearing(double bearing)
 {
-    m_selfAnimating = true;
+    const QSignalBlocker blocker(m_map);
     m_map->setBearing(bearing);
 }
 
@@ -684,7 +665,6 @@ void LocationIndicatorManager::onAnimStep()
 
         double lat = m_followStartLat + (m_followTargetLat - m_followStartLat) * eased;
         double lon = m_followStartLon + (m_followTargetLon - m_followStartLon) * eased;
-        m_selfAnimating = true;
         safeSetCoordinate(lat, lon);
 
         if (m_targetBearing >= 0) {
