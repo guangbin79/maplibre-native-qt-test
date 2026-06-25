@@ -1073,6 +1073,14 @@ private:
     QPointF m_lastTouchEndPos;         ///< 上次触摸结束的位置
     static constexpr qint64 DOUBLE_TAP_INTERVAL_MS = 300;  ///< 双击时间阈值（毫秒）
     static constexpr qreal DOUBLE_TAP_DISTANCE_PX = 50.0;  ///< 双击距离阈值（像素）
+
+    // 单指单击检测：触摸屏上模拟鼠标点击
+    qint64 m_singleTouchStartTime = 0;      ///< 当前触摸开始时间戳（毫秒）
+    QPointF m_singleTouchStartPos;          ///< 当前触摸开始位置
+    bool m_touchWasDoubleTap = false;       ///< True 当触摸已被双击处理
+    static constexpr qint64 SINGLE_TAP_MAX_DURATION_MS = 300;   ///< 单击最大持续时间（毫秒）
+    static constexpr qreal SINGLE_TAP_MAX_DRIFT_PX = 20.0;      ///< 单击最大漂移距离（像素）
+
     static constexpr double MAX_ZOOM = 18.0;  ///< 地图最大缩放级别
 
     // 双指点击缩小检测

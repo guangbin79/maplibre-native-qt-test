@@ -272,11 +272,18 @@ bool MapContainer::event(QEvent *event) {
 
         // 双击检测：单指按下时检查是否与上次触摸结束构成双击
         if (m_touchPointCount == 1) {
+            // 防御性重置：每次单指触摸开始时清除上一次双击标记
+            m_touchWasDoubleTap = false;
             qint64 pressTime = static_cast<qint64>(points.first().pressTimestamp());
             QPointF pos = points.first().position();
+            // Record single-tap start time and position for TouchEnd tap detection
+            m_singleTouchStartTime = pressTime;
+            m_singleTouchStartPos = pos;
             qint64 timeDelta = pressTime - m_lastTouchEndTime;
             qreal dist = QLineF(pos, m_lastTouchEndPos).length();
             if (timeDelta > 0 && timeDelta < DOUBLE_TAP_INTERVAL_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
+                // Mark this touch as consumed by double-tap to prevent spurious mapClicked
+                m_touchWasDoubleTap = true;
                 double targetZoom = qMin(map()->zoom() + 1.0, MAX_ZOOM);
                 QMapLibre::Coordinate anchorCoord = screenToCoordinate(pos);
                 QMapLibre::Coordinate currentCenter = map()->coordinate();
@@ -388,6 +395,7 @@ bool MapContainer::event(QEvent *event) {
             map()->moveBy(delta);
         // 1→2 过渡: 第二个手指刚加入，初始化双指点击检测参数
         } else if (m_lastTouchPoints.count() == 1 && m_touchPointCount == 2) {
+            m_singleTouchStartTime = 0;  // 单指单击失效，进入双指模式
             const QPointF &p1 = points.at(0).scenePosition();
             const QPointF &p2 = points.at(1).scenePosition();
             qint64 pressTs = 0;
@@ -563,10 +571,36 @@ bool MapContainer::event(QEvent *event) {
     // ============================================================
     case QEvent::TouchEnd:
     case QEvent::TouchCancel: {
-        // 记录双击检测信息（仅在单指触摸结束时）
+        // 单指触摸结束：处理单击和双击记录
         if (m_touchPointCount == 1 && !m_lastTouchPoints.isEmpty()) {
-            m_lastTouchEndTime = static_cast<qint64>(m_lastTouchPoints.first().timestamp());
-            m_lastTouchEndPos = m_lastTouchPoints.first().position();
+            // 从当前事件读取端点信息（非缓存的 m_lastTouchPoints）
+            // 缓存的点是上次 TouchUpdate 的数据，无更新时 timestamp ≈ pressTime 导致 duration ≈ 0
+            auto *te = static_cast<QTouchEvent *>(event);
+            const auto &curPoints = te->points();
+            // 防御性空检查：TouchCancel 事件可能不携带触摸点
+            if (!curPoints.isEmpty()) {
+                QPointF endPos = curPoints.first().position();
+                qint64 endTime = static_cast<qint64>(curPoints.first().timestamp());
+
+                if (event->type() == QEvent::TouchEnd && !m_touchWasDoubleTap && m_singleTouchStartTime > 0) {
+                    // 单指单击检测：持续时间短 + 手指没有明显移动
+                    qint64 duration = endTime - m_singleTouchStartTime;
+                    qreal drift = QLineF(m_singleTouchStartPos, endPos).length();
+                    if (duration > 0 && duration < SINGLE_TAP_MAX_DURATION_MS
+                        && drift < SINGLE_TAP_MAX_DRIFT_PX) {
+                        // 检测到单指单击 → 发射 mapClicked
+                        QMapLibre::Coordinate coord = map()->coordinateForPixel(endPos);
+                        emit mapClicked(coord.first, coord.second, endPos);
+                    }
+                }
+
+                // 仅在真正的 TouchEnd 时记录双击检测信息
+                // （TouchCancel 是系统中断，不应污染下次双击判断）
+                if (event->type() == QEvent::TouchEnd) {
+                    m_lastTouchEndTime = endTime;
+                    m_lastTouchEndPos = endPos;
+                }
+            }
         }
 
         // 双指点击缩小检测：两指同时轻触后快速抬起，无明显移动
@@ -626,6 +660,8 @@ bool MapContainer::event(QEvent *event) {
                     m_panSkipCounter = 0;
                     m_twoFingerTapStartTime = 0;
                     m_twoFingerGestureOccurred = false;
+                    m_touchWasDoubleTap = false;
+                    m_singleTouchStartTime = 0;
                     m_initialPinchDist = 0.0;
                     map()->setGestureInProgress(false);
                     emit touchEnd();
@@ -645,6 +681,8 @@ bool MapContainer::event(QEvent *event) {
         m_panSkipCounter = 0;
         m_twoFingerGestureOccurred = false;
         m_initialPinchDist = 0.0;
+        m_touchWasDoubleTap = false;
+        m_singleTouchStartTime = 0;
         map()->setGestureInProgress(false);
         emit touchEnd();
         event->accept();
