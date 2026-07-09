@@ -37,7 +37,7 @@ void tst_CoordinateConversion::initTestCase()
     QTest::qWait(500);
 
     MapContainer::MapConfig config;
-    config.styleUrl = "http://127.0.0.1:4943/styles/day/style.json?schema=hxmap";
+    config.styleUrl = "http://127.0.0.1:4943/mvt/styles/day/style.json?schema=hxmap";
     config.defaultCoordinate = QMapLibre::Coordinate(39.9, 116.4);
     config.defaultZoom = 10.0;
 

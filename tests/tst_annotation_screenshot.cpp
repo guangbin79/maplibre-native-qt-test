@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
     MapContainer::MapConfig config;
-    config.styleUrl = "http://127.0.0.1:4943/styles/day/style.json?schema=hxmap";
+    config.styleUrl = "http://127.0.0.1:4943/mvt/styles/day/style.json?schema=hxmap";
     config.defaultCoordinate = QMapLibre::Coordinate(36.75, 3.05);
     config.defaultZoom = 8.0;
 

@@ -70,7 +70,7 @@ MainWindow::MainWindow(QWidget *parent)
 #ifdef Q_OS_ANDROID
     // Android：HXGISServer 在本地启动，使用 loopback 地址
     const QString serverHost = QStringLiteral("127.0.0.1");
-    const QString serverUrl = QStringLiteral("http://%1:4943/styles/day/style.json?schema=hxmap").arg(serverHost);
+    const QString serverUrl = QStringLiteral("http://%1:4943/mvt/styles/day/style.json?schema=hxmap").arg(serverHost);
 
     // Android：数据目录为外部存储 /storage/emulated/0/TitanNavi/map_data
     // 首次运行需将 map_data 复制到该目录（可通过 Qt 的 assets 或手动 push）
@@ -78,7 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
 #else
     // 桌面：HXGISServer 本地运行
     const QString serverHost = QStringLiteral("127.0.0.1");
-    const QString serverUrl = QStringLiteral("http://127.0.0.1:4943/styles/day/style.json?schema=hxmap");
+    const QString serverUrl = QStringLiteral("http://127.0.0.1:4943/mvt/styles/day/style.json?schema=hxmap");
 
     // 桌面：数据目录为构建目录下的绝对路径
     const QString dataRootPath = QStringLiteral("/home/guangbin/Documents/untitled/build/linux-x86_64-test/map_data");

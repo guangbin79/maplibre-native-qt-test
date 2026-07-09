@@ -249,10 +249,10 @@ int main(int argc, char *argv[])
      *
      * 验证方式：
      *   - 代码层面：server.isRunning() 返回 true/false
-     *   - 手动验证：curl http://127.0.0.1:4943/styles/day/style.json
+     *   - 手动验证：curl http://127.0.0.1:4943/mvt/styles/day/style.json
      *   - 日志输出：server.version() 返回版本字符串表示初始化成功
      *
-     * 启动后可通过 http://127.0.0.1:4943/styles/day/style.json 访问地图样式。
+     * 启动后可通过 http://127.0.0.1:4943/mvt/styles/day/style.json 访问地图样式。
      */
     HXGISServer server(gisUrl, rootPath.toUtf8().constData());
     if (!server.isRunning()) {
