@@ -1034,6 +1034,7 @@ protected:
 
 private:
     QMapLibre::GLWidget *m_glWidget;
+    bool m_renderDirty = false;  ///< needsRendering 去抖闸门标记(见 connectMapSignals)
     double m_lastZoom = 0.0;
     double m_lastBearing = 0.0;
     double m_lastPitch = 0.0;

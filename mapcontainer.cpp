@@ -27,6 +27,30 @@
 #include <cmath>
 #include <QResizeEvent>
 
+// ponytail: LI_PROFILE=1 性能插桩 — 统计 GLWidget 重绘事件率,定位连续渲染来源
+class PaintCountFilter : public QObject {
+public:
+    using QObject::QObject;
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        const auto type = event->type();
+        if (type == QEvent::Paint || type == QEvent::UpdateRequest
+            || type == QEvent::UpdateLater) {
+            static qint64 s_paint = 0, s_update = 0, s_win = 0;
+            if (type == QEvent::Paint) ++s_paint; else ++s_update;
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (s_win == 0) s_win = now;
+            const qint64 span = now - s_win;
+            if (span >= 3000) {
+                qInfo("[LI_PROFILE] glwidget paints=%lld updateRequests=%lld / %lldms",
+                      s_paint, s_update, span);
+                s_paint = 0; s_update = 0; s_win = now;
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
+
 MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     : QWidget(parent)
     , m_glWidget(nullptr)
@@ -56,6 +80,11 @@ MapContainer::MapContainer(const MapConfig &config, QWidget *parent)
     // GLWidget 是 QMapLibre 的 OpenGL 渲染组件，负责地图的底层渲染
     // ============================================================
     m_glWidget = new QMapLibre::GLWidget(settings);
+
+    // ponytail: LI_PROFILE=1 时统计 GLWidget 的 Paint/UpdateRequest 事件率
+    if (qEnvironmentVariableIsSet("LI_PROFILE")) {
+        m_glWidget->installEventFilter(new PaintCountFilter(m_glWidget));
+    }
     m_glWidget->installEventFilter(this);
 
     // ============================================================
@@ -1050,6 +1079,23 @@ void MapContainer::connectMapSignals()
     }
 
     connect(m, &QMapLibre::Map::mapChanged, this, [this, m](QMapLibre::Map::MapChange change) {
+        // ponytail: LI_PROFILE=1 渲染帧率观测,定位 GUI 线程重绘来源
+        if (qEnvironmentVariableIsSet("LI_PROFILE")) {
+            static qint64 s_total = 0, s_frames = 0, s_win = 0;
+            ++s_total;
+            if (change == QMapLibre::Map::MapChangeDidFinishRenderingFrame
+                || change == QMapLibre::Map::MapChangeDidFinishRenderingFrameFullyRendered)
+                ++s_frames;
+            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+            if (s_win == 0) s_win = nowMs;
+            const qint64 span = nowMs - s_win;
+            if (span >= 3000) {
+                qInfo("[LI_PROFILE] mapChanged total=%lld renderFrames=%lld / %lldms",
+                      s_total, s_frames, span);
+                s_total = 0; s_frames = 0; s_win = nowMs;
+            }
+        }
+
         if (change == QMapLibre::Map::MapChangeDidFinishLoadingMap) {
             m_annotationManager->setMapReady(true);
             m_routeManager->setMapReady(true);
@@ -1102,6 +1148,21 @@ void MapContainer::connectMapSignals()
     auto coord = m->coordinate();
     m_lastLat = coord.first;
     m_lastLon = coord.second;
+
+    // ponytail: needsRendering 去抖闸门 — 实测 SDK 在相机持续更新时以 ~100-160fps
+    // 无节流同步重绘(~50% GUI CPU)。断开 SDK 内部的 needsRendering→重绘直连,
+    // 改为 30fps 定时器闸门:有渲染请求才 update(),空闲时零开销。
+    disconnect(m, &QMapLibre::Map::needsRendering, nullptr, nullptr);
+    connect(m, &QMapLibre::Map::needsRendering, this, [this]() { m_renderDirty = true; });
+    auto *renderGate = new QTimer(this);
+    renderGate->setInterval(33);
+    connect(renderGate, &QTimer::timeout, this, [this]() {
+        if (m_renderDirty) {
+            m_renderDirty = false;
+            m_glWidget->update();
+        }
+    });
+    renderGate->start();
 
     m_annotationManager = new AnnotationManager(m, this);
     m_routeManager = new RouteManager(m, this);
