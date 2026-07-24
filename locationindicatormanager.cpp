@@ -656,12 +656,19 @@ void LocationIndicatorManager::applyFreeMode()
 
 void LocationIndicatorManager::safeSetCoordinate(double lat, double lon)
 {
+    // ponytail: skip unchanged values — setCoordinate forces a full map re-render
+    const auto cur = m_map->coordinate();
+    if (qAbs(cur.first - lat) < 1e-9 && qAbs(cur.second - lon) < 1e-9)
+        return;
     const QSignalBlocker blocker(m_map);
     m_map->setCoordinate(QMapLibre::Coordinate(lat, lon));
 }
 
 void LocationIndicatorManager::safeSetBearing(double bearing)
 {
+    // ponytail: skip unchanged values — setBearing forces a full map re-render
+    if (qAbs(m_map->bearing() - bearing) < 1e-6)
+        return;
     const QSignalBlocker blocker(m_map);
     m_map->setBearing(bearing);
 }
@@ -776,12 +783,23 @@ void LocationIndicatorManager::onAnimStep()
                 m_overlayRotStart = m_overlayRotTarget;
             }
         }
+
+        // All animations settled — stop the 30fps timer until next setLocation().
+        if (frame.complete && !m_resumeAnimating
+            && m_overlayRotStart == m_overlayRotTarget) {
+            m_animTimer->stop();
+        }
     } else if ((m_state == State::FreeVisible || m_state == State::FixedBrowsing) && m_layerSetup) {
         auto frame = computeIconFrame(now);
-        m_displayLat = frame.lat;
-        m_displayLon = frame.lon;
-        updateSourceToCoordinate(m_displayLat, m_displayLon);
+        if (frame.lat != m_displayLat || frame.lon != m_displayLon) {
+            m_displayLat = frame.lat;
+            m_displayLon = frame.lon;
+            updateSourceToCoordinate(m_displayLat, m_displayLon);
+        }
         maybeEmitVisualLocation(frame.lat, frame.lon);
+
+        if (frame.complete)
+            m_animTimer->stop();
     }
 }
 
