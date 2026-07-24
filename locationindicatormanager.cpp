@@ -17,6 +17,32 @@
 #include <QDateTime>
 #include "cameraanimationmath.h"
 
+// ponytail: LI_PROFILE=1 性能插桩,定位 GUI 线程热点;默认关闭,近乎零开销
+#include <QElapsedTimer>
+namespace {
+struct AnimProf {
+    qint64 steps = 0, stepUs = 0;
+    qint64 rotCalls = 0, rotUs = 0;
+    qint64 setCoord = 0, setBearing = 0, updSrc = 0;
+    qint64 windowStart = 0;
+};
+AnimProf g_prof;
+const bool g_profEnabled = qEnvironmentVariableIsSet("LI_PROFILE");
+void profFlush()
+{
+    if (!g_profEnabled) return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (g_prof.windowStart == 0) { g_prof.windowStart = now; return; }
+    const qint64 span = now - g_prof.windowStart;
+    if (span >= 3000) {
+        qInfo("[LI_PROFILE] span=%lldms steps=%lld stepUs=%lld rotCalls=%lld rotUs=%lld setCoord=%lld setBearing=%lld updSrc=%lld",
+              span, g_prof.steps, g_prof.stepUs, g_prof.rotCalls, g_prof.rotUs,
+              g_prof.setCoord, g_prof.setBearing, g_prof.updSrc);
+        g_prof = AnimProf{};
+        g_prof.windowStart = now;
+    }
+}
+} // namespace
 
 LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
     : QObject(container), m_map(nullptr), m_mapContainer(container)
@@ -46,6 +72,7 @@ LocationIndicatorManager::LocationIndicatorManager(MapContainer* container)
         // Symbol Layer stays visible during animation (icon pinned at GPS coordinate).
         // Overlay shown only AFTER animation completes (in onAnimStep).
         m_state = State::FixedFollowing;
+        setFollowGesture(true);
         emit followingPausedChanged(false);
         m_resumeAnimating = true;
 
@@ -275,12 +302,14 @@ void LocationIndicatorManager::setMode(LocationMode mode)
     if (m_mode == LocationMode::Fixed) {
         if (m_visible && m_state == State::FreeVisible) {
             m_state = State::FixedFollowing;
+            setFollowGesture(true);
         }
         applyFixedMode();
     } else {
         State old = m_state;
         if (m_visible && (old == State::FixedFollowing || old == State::FixedBrowsing)) {
             m_state = State::FreeVisible;
+            setFollowGesture(false);
             if (old == State::FixedBrowsing)
                 emit followingPausedChanged(false);
         }
@@ -347,6 +376,7 @@ void LocationIndicatorManager::showLocation()
         if (m_state != State::FixedFollowing) {
             State old = m_state;
             m_state = State::FixedFollowing;
+            setFollowGesture(true);
             if (old == State::FixedBrowsing)
                 emit followingPausedChanged(false);
         }
@@ -383,6 +413,7 @@ void LocationIndicatorManager::hideLocation()
         if (m_state == State::FixedBrowsing)
             emit followingPausedChanged(false);
         m_state = State::Hidden;
+        setFollowGesture(false);
     }
 
     if (m_overlay)
@@ -476,6 +507,7 @@ void LocationIndicatorManager::transitionToBrowsing()
 {
     if (m_state != State::FixedFollowing) return;
     m_state = State::FixedBrowsing;
+    setFollowGesture(false);
     m_followingPaused = true;
     if (m_animTimer) m_animTimer->stop();
     if (m_resumeTimer) {
@@ -545,6 +577,7 @@ void LocationIndicatorManager::updateSourceToCoordinate(double lat, double lon)
     if (!m_layerSetup || !m_ready || !m_map)
         return;
 
+    if (g_profEnabled) ++g_prof.updSrc;
     QJsonObject feature;
     feature["type"] = "Feature";
 
@@ -654,14 +687,30 @@ void LocationIndicatorManager::applyFreeMode()
     }
 }
 
+void LocationIndicatorManager::setFollowGesture(bool on)
+{
+    if (!m_map || on == m_followGestureActive)
+        return;
+    m_followGestureActive = on;
+    // ponytail: 跟随时进入 gesture 模式 — gestureInProgress 下 mbgl 走廉价的
+    // "still" 渲染路径(抑制符号放置淡入),与手动拖拽同路径;不设此标志时
+    // API 相机更新会让渲染器以 ~100-160fps 连续空转(实测 ~50% GUI CPU)
+    m_map->setGestureInProgress(on);
+}
+
 void LocationIndicatorManager::safeSetCoordinate(double lat, double lon)
 {
     // ponytail: skip unchanged values — setCoordinate forces a full map re-render
     const auto cur = m_map->coordinate();
     if (qAbs(cur.first - lat) < 1e-9 && qAbs(cur.second - lon) < 1e-9)
         return;
+    if (g_profEnabled) ++g_prof.setCoord;
     const QSignalBlocker blocker(m_map);
-    m_map->setCoordinate(QMapLibre::Coordinate(lat, lon));
+    // jumpTo 而非 setCoordinate:setCoordinate 内部是 easeTo 缓动动画,
+    // 每帧调用会无限重启动画,导致渲染器以 ~160fps 连续空转(实测占 ~45% CPU)
+    QMapLibre::CameraOptions options;
+    options.center = QVariant::fromValue(QMapLibre::Coordinate(lat, lon));
+    m_map->jumpTo(options);
 }
 
 void LocationIndicatorManager::safeSetBearing(double bearing)
@@ -669,8 +718,11 @@ void LocationIndicatorManager::safeSetBearing(double bearing)
     // ponytail: skip unchanged values — setBearing forces a full map re-render
     if (qAbs(m_map->bearing() - bearing) < 1e-6)
         return;
+    if (g_profEnabled) ++g_prof.setBearing;
     const QSignalBlocker blocker(m_map);
-    m_map->setBearing(bearing);
+    QMapLibre::CameraOptions options;
+    options.bearing = bearing;
+    m_map->jumpTo(options);
 }
 
 static double bearingDelta(double from, double to) {
@@ -721,6 +773,9 @@ void LocationIndicatorManager::onAnimStep()
 {
     if (!m_map)
         return;
+
+    QElapsedTimer profTimer;
+    if (g_profEnabled) { profTimer.start(); ++g_prof.steps; }
 
     qint64 now = QDateTime::currentMSecsSinceEpoch();
 
@@ -801,6 +856,8 @@ void LocationIndicatorManager::onAnimStep()
         if (frame.complete)
             m_animTimer->stop();
     }
+
+    if (g_profEnabled) { g_prof.stepUs += profTimer.nsecsElapsed() / 1000; profFlush(); }
 }
 
 bool LocationIndicatorManager::eventFilter(QObject* watched, QEvent* event)
@@ -815,6 +872,9 @@ void LocationIndicatorManager::updateOverlayRotation(double angle)
 {
     if (!m_overlay || m_icon.isNull())
         return;
+
+    QElapsedTimer profTimer;
+    if (g_profEnabled) { profTimer.start(); ++g_prof.rotCalls; }
 
     const double dpr = QGuiApplication::primaryScreen()
                            ? QGuiApplication::primaryScreen()->devicePixelRatio()
@@ -856,6 +916,8 @@ void LocationIndicatorManager::updateOverlayRotation(double angle)
         m_overlay->setFixedSize(scaledW, scaledH);
     }
     repositionOverlay();
+
+    if (g_profEnabled) g_prof.rotUs += profTimer.nsecsElapsed() / 1000;
 }
 
 void LocationIndicatorManager::updateIconAlignment()

@@ -287,6 +287,7 @@ private:
     void updateSourceToCoordinate(double lat, double lon);
     void safeSetCoordinate(double lat, double lon);
     void safeSetBearing(double bearing);
+    void setFollowGesture(bool on);
     int effectiveCenterOffset() const;
 
 
@@ -333,6 +334,7 @@ protected:
     int m_fixedTouchResumeTimeout = 3000;
     bool m_followingPaused = false;
     bool m_resumeAnimating = false;
+    bool m_followGestureActive = false;  ///< setGestureInProgress 防重入跟踪
     static constexpr int RESUME_ANIM_DURATION = 300;  // ms — quick snap back to GPS
 
     // Animation start state — recorded on each setLocation call
