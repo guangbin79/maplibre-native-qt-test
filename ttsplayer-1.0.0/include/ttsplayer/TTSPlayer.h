@@ -32,6 +32,8 @@ public slots:
     void stop();
     void setVolume(qreal volume);
     void setMuted(bool muted);
+    void switchModel(QString modelPath);
+    void switchModelWithResources(QString modelPath, void *resourceManager);
 
 signals:
     void readyChanged(bool ready);
@@ -42,12 +44,14 @@ signals:
     void finished();
     void stopped();
     void errorOccurred(const QString &errorMsg);
+    void modelSwitched(const QString &modelPath);
 
 private:
     friend class TTSPlayerImpl;
 
     Q_SIGNAL void requestInitialize(const QString &modelPath);
     Q_SIGNAL void requestInitializeWithResources(const QString &modelPath, void *resourceManager);
+    Q_SIGNAL void requestSwitchModel(const QString &modelPath, void *resourceManager, bool useResources);
     Q_SIGNAL void requestPlay(const QString &text);
     Q_SIGNAL void requestStop();
     Q_SIGNAL void requestSetVolume(qreal volume);

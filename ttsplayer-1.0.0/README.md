@@ -37,5 +37,5 @@ export LD_LIBRARY_PATH=linux_x86_64/lib:
 ## Build Information
 
 - Qt Version: 6.6.3
-- Build Date: 2026-05-11 13:46:26
+- Build Date: 2026-08-17 13:44:43
 - Platforms: Linux x86_64, Android arm64-v8a
