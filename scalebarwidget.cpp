@@ -93,6 +93,11 @@ void ScaleBarWidget::paintEvent(QPaintEvent * /*event*/)
     // metersPerPixel = 156543.03392 * 0.801 / 256 ≈ 490 米/像素
     const double metersPerPixel = 156543.03392 *
         std::cos(m_latitude * M_PI / 180.0) / std::pow(2.0, m_zoomLevel);
+    // ========== 步骤1.5：计算 1:N 数字比例分母（representative fraction） ==========
+    // 屏幕每物理米像素数 = DPI / 0.0254；N = 米/像素 × 每米像素数
+    // ponytail: 部分 X11 环境 logicalDPI 恒返 96，精度受限但可用
+    const double dpi = logicalDpiY() > 0 ? logicalDpiY() : 96.0;
+    const double ratioDenom = metersPerPixel * dpi / 0.0254;
 
     // ========== 步骤2：选择"nice"距离值 ==========
     //
@@ -189,4 +194,6 @@ void ScaleBarWidget::paintEvent(QPaintEvent * /*event*/)
     painter.setPen(Qt::black);
     QString zoomText = QString("Z%1").arg(static_cast<int>(m_zoomLevel));
     painter.drawText(static_cast<int>(barWidth) + 6, textY, zoomText);
+    // ========== 步骤9：绘制 1:N 数字比例标注（比例尺条下方第二行） ==========
+    painter.drawText(0, 30, QString("1:%L1").arg(qRound(ratioDenom)));
 }
