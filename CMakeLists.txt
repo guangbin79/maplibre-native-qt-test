@@ -171,6 +171,8 @@ qt_add_executable(appuntitled
     geojsonimporter.cpp
     locationindicatormanager.h
     locationindicatormanager.cpp
+    imageryoverlaymanager.h
+    imageryoverlaymanager.cpp
     testrunner.h
     testrunner.cpp
 )
