@@ -49,6 +49,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_routeLayerToggle(nullptr)
     , m_polygonLayerToggle(nullptr)
     , m_locationLayerToggle(nullptr)
+    , m_imageryLayerToggle(nullptr)
     , m_testRunner(nullptr)
     , m_testLogView(nullptr)
     , m_ttsPlayer(nullptr)
@@ -180,6 +181,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_locationLayerToggle->setChecked(false);
     m_locationLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
     scrollLayout->addWidget(m_locationLayerToggle);
+
+    m_imageryLayerToggle = new QCheckBox(QStringLiteral("影像叠加"), m_controlPanel);
+    m_imageryLayerToggle->setChecked(true);
+    m_imageryLayerToggle->setStyleSheet(QStringLiteral("color: white; font-size: 11px;"));
+    scrollLayout->addWidget(m_imageryLayerToggle);
 
     // ============================================================
     // API 演示按钮区域 - 供开发人员手动测试各接口
@@ -390,6 +396,15 @@ MainWindow::MainWindow(QWidget *parent)
         m_mapContainer->setAnnotations(anns);
         m_mapContainer->setCenter(36.7538, 3.0588);
         m_mapContainer->setZoom(12.0);
+    });
+
+    auto *btnPanCasablanca = new QPushButton(QStringLiteral("平移→卡萨布兰卡"), m_controlPanel);
+    btnPanCasablanca->setStyleSheet(QStringLiteral("QPushButton { background-color: #9C27B0; color: white; font-size: %1px; padding: %2px; }").arg(btnFontSize).arg(btnPadding));
+    scrollLayout->addWidget(btnPanCasablanca);
+    connect(btnPanCasablanca, &QPushButton::clicked, this, [this]() {
+        // 平移到卡萨布兰卡 (33.57°N, 7.62°W)，zoom 12 落在影像 z11-14 范围内
+        m_mapContainer->setCenter(33.57, -7.62);
+        m_mapContainer->setZoom(12);
     });
 
     // ── 线路 API 演示 ──
@@ -1146,6 +1161,8 @@ MainWindow::MainWindow(QWidget *parent)
         else
             m_mapContainer->hideAllRoutes();
     });
+
+    connect(m_imageryLayerToggle, &QCheckBox::toggled, this, [this](bool on) { if (auto *m = m_mapContainer->imageryOverlayManager()) m->setVisible(on); });
 
     // 8. 多边形图层开关
     connect(m_polygonLayerToggle, &QCheckBox::toggled,

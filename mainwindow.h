@@ -76,6 +76,7 @@ private:
     QCheckBox *m_routeLayerToggle;
     QCheckBox *m_polygonLayerToggle;
     QCheckBox *m_locationLayerToggle;
+    QCheckBox *m_imageryLayerToggle;
 
     LocationIndicatorManager* m_locationIndicatorManager = nullptr;
     TestRunner *m_testRunner;
