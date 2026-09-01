@@ -1100,6 +1100,7 @@ void MapContainer::connectMapSignals()
             m_annotationManager->setMapReady(true);
             m_routeManager->setMapReady(true);
             m_polygonManager->setMapReady(true);
+            m_imageryOverlayManager->setMapReady(true);
             m_mapReady = true;
             emit mapReady();
             return;
@@ -1167,6 +1168,7 @@ void MapContainer::connectMapSignals()
     m_annotationManager = new AnnotationManager(m, this);
     m_routeManager = new RouteManager(m, this);
     m_polygonManager = new PolygonManager(m, this);
+    m_imageryOverlayManager = new ImageryOverlayManager(m, this);
 }
 
 void MapContainer::applyLanguageLabels()

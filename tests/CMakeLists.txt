@@ -126,6 +126,7 @@ add_executable(tst_gui tst_gui.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/imageryoverlaymanager.cpp
     ${CMAKE_SOURCE_DIR}/geojsonexporter.cpp
     ${CMAKE_SOURCE_DIR}/geojsonimporter.cpp
     ${CMAKE_SOURCE_DIR}/testrunner.cpp
@@ -154,6 +155,7 @@ add_executable(tst_annotation_screenshot tst_annotation_screenshot.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/imageryoverlaymanager.cpp
     ${CMAKE_SOURCE_DIR}/scalebarwidget.cpp
     ${CMAKE_SOURCE_DIR}/hxgisserver.cpp
 )
@@ -176,6 +178,7 @@ add_executable(tst_coordinateconversion tst_coordinateconversion.cpp
     ${CMAKE_SOURCE_DIR}/polygongeojsonbuilder.cpp
     ${CMAKE_SOURCE_DIR}/polygonmanager.cpp
     ${CMAKE_SOURCE_DIR}/locationindicatormanager.cpp
+    ${CMAKE_SOURCE_DIR}/imageryoverlaymanager.cpp
     ${CMAKE_SOURCE_DIR}/scalebarwidget.cpp
     ${CMAKE_SOURCE_DIR}/hxgisserver.cpp
 )

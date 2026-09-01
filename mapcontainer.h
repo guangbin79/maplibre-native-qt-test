@@ -35,6 +35,7 @@
 #include "routemanager.h"
 #include "mappolygon.h"
 #include "polygonmanager.h"
+#include "imageryoverlaymanager.h"
 #include "cameraanimationmath.h"
 
 
@@ -204,6 +205,9 @@ public:
 
     /** @brief 获取多边形管理器 @see PolygonManager */
     PolygonManager* polygonManager() const { return m_polygonManager; }
+
+    /** @brief 获取影像叠加管理器 @see ImageryOverlayManager */
+    ImageryOverlayManager* imageryOverlayManager() const { return m_imageryOverlayManager; }
 
 
     /**
@@ -1120,6 +1124,7 @@ private:
     AnnotationManager* m_annotationManager = nullptr;
     RouteManager* m_routeManager = nullptr;
     PolygonManager* m_polygonManager = nullptr;
+    ImageryOverlayManager* m_imageryOverlayManager = nullptr;
     bool m_mapReady = false;
 
     void connectMapSignals();
