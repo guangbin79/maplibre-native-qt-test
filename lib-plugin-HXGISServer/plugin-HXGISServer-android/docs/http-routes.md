@@ -169,13 +169,13 @@ GET /gisserver/mbtiles/{z}/{x}/{y}/{data}
 | 段 | 说明 |
 |----|------|
 | z | 缩放级别（整数） |
-| x | 列号（TMS 坐标系，整数） |
-| y | 行号（TMS 坐标系，整数） |
+| x | 列号（XYZ/TMS 相同，整数） |
+| y | 行号（XYZ 坐标系，原点左上角，整数） |
 | data | 数据路径（相对于 `HX_GIS_DATA_PATH`，可含子目录） |
 
 **正则**: `^/gisserver/mbtiles/*/*/*/*.*`
 
-**坐标转换**: URL 中的 `y` 为 TMS 坐标（原点左下角），查询时转换为 MBTiles 内部的 `tile_row`（原点左上角）:
+**坐标转换**: URL 中的 `y` 为 XYZ 坐标（原点左上角），MBTiles 规范内部 `tile_row` 为 TMS（原点左下角），查询时需翻转:
 ```
 tile_row = 2^z - 1 - y
 ```
@@ -196,12 +196,12 @@ SELECT value FROM metadata WHERE name = 'format'
 | 模式 | 条件 | 行为 |
 |------|------|------|
 | 单文件 | `data` 以 `.mbtiles` 结尾 | 直接打开该文件查瓦片 |
-| 目录聚合 | `data` 为目录路径 | 遍历目录下所有 `.mbtiles` 文件，通过 `metadata.bounds` 判断哪个文件包含请求坐标 |
+| 目录聚合 | `data` 为目录路径 | best-fit 选库：与请求瓦片矩形相交（闭区间）的文件中按 bounds 面积升序，首个持有该瓦片行者返回数据 |
 
-**目录聚合缓存机制**:
-- 首次访问目录时，打开目录下所有 `.mbtiles` 文件并缓存 DB 句柄到 `m_mbtiles` 列表
-- 记录上次命中的 DB 句柄 `m_last_mbtiles_db`，下次优先尝试
-- 相同目录路径不会重新扫描
+**目录聚合选库机制（best-fit 矩形相交）**:
+- 首次访问目录时，打开目录下所有 `.mbtiles` 文件（只读，非递归），一次性解析各文件 `metadata.bounds` 并缓存为（bounds、面积 = 宽×高、文件名）到 `m_mbtiles` 列表；相同目录**路径字符串**复用缓存，仅当请求的目录路径不同才重新扫描；同路径下文件增删不感知（需重启或切换路径触发）
+- 每次请求计算请求瓦片的 XYZ 矩形，与各文件 bounds 做**闭区间矩形相交**判定候选；无 `metadata.bounds` 或解析失败的文件视为无限面积，恒为候选且排序垫底（含 bounds 数值反写 min>max 的损坏元数据）
+- 候选按（面积, 文件名）升序逐个查 `tiles` 表，首个持有该瓦片行的文件返回数据；全部未命中返回 `204`
 
 **响应**:
 - `200` + 二进制瓦片数据（Content-Type 自动检测：png/jpg/bmp，无法识别时按 `application/x-protobuf` + `gzip` 编码处理）

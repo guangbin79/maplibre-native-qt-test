@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
         if (strcmp(cache_path, "") == 0) cache_path = nullptr;
     }
     if (argc >= 5) {
-        mode = atoi(argv[4]);
+        mode = std::stoi(argv[4]);
     }
 
     if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
