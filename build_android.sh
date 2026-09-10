@@ -67,8 +67,10 @@ echo "Type:   ${BUILD_TYPE}"
 echo "Jobs:   ${JOBS}"
 echo ""
 
-# 清理旧构建（Android 构建建议全量重建，避免残留文件导致问题）
-rm -rf "${BUILD_DIR}"
+# 清理旧构建（增量默认；CLEAN=1 全量重建——gradle/androiddeployqt 陈旧状态疑似时用）
+if [[ "${CLEAN:-0}" == "1" ]]; then
+  rm -rf "${BUILD_DIR}"
+fi
 
 # MapLibre cmake 配置文件路径（必须显式指定，交叉编译环境下无法自动发现）
 MAPLIBRE_DIR="${PROJECT_DIR}/maplibre-native-qt_v3.0.0_Qt6.6.3_Android/arm64-v8a/lib/cmake/QMapLibre"
